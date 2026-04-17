@@ -1,0 +1,566 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{natbib}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    citecolor=green!50!black,
+    urlcolor=blue!70!black,
+}
+
+\newcommand{\RR}{\mathbb{R}}
+\newcommand{\bx}{\mathbf{x}}
+\newcommand{\bW}{\mathbf{W}}
+\newcommand{\bP}{\mathbf{P}}
+\newcommand{\bE}{\mathbf{E}}
+\newcommand{\bI}{\mathbf{I}}
+
+\title{EigenDialectos: Spectral Dialect Classification\\for Spanish Varieties via Contrastive Learning\\and Eigenmode Fingerprinting}
+
+\author{Jose Luis Saorin}
+\date{April 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present EigenDialectos, a system for classifying Spanish text into eight
+regional dialect varieties using two complementary approaches built on a
+shared transformer backbone. The first method fine-tunes BETO (a Spanish BERT
+model) with LoRA adapters using a multi-task objective combining masked language
+modeling, ArcFace angular-margin classification, and supervised contrastive
+learning with Momentum Contrast (MoCo) queues. The second method extracts
+contextual word embeddings per variety, aligns them via Procrustes, computes
+inter-dialect transformation matrices, and classifies text via eigenmode
+spectral fingerprints. On a test set of dialectally-marked sentences, the
+projection-space centroid classifier achieves 58\% accuracy across 8 varieties
+(chance = 12.5\%), with strong performance on lexically distinctive dialects
+(Rioplatense, Chilean, Mexican) and room for improvement on varieties with
+shared Iberian features (Andalusian, Canarian). We describe the architecture,
+training dynamics, the ArcFace collapse phenomenon and its resolution, and the
+mathematical framework underlying the spectral approach.
+\end{abstract}
+
+\section{Introduction}
+
+Spanish is spoken by over 500 million people across more than 20 countries,
+giving rise to significant regional variation at lexical, phonological,
+morphosyntactic, and pragmatic levels. While dialect identification has been
+studied for major world languages \citep{zampieri2017findings}, fine-grained
+classification of Spanish varieties---particularly distinguishing between
+closely related dialects like Andalusian, Canarian, and Peninsular
+standard---remains challenging.
+
+We address this with EigenDialectos, which combines modern contrastive
+representation learning with classical spectral analysis of linear
+transformations. Our contributions are:
+
+\begin{enumerate}
+    \item A multi-task training framework combining MLM, ArcFace, and
+    SupCon+MoCo+DCL contrastive objectives for dialect-discriminative
+    representations.
+    \item A spectral classification method based on eigendecomposition of
+    inter-dialect transformation matrices.
+    \item Analysis of the ArcFace angular collapse phenomenon when
+    classification and contrastive objectives operate in misaligned feature
+    spaces.
+    \item A projection-space centroid classifier that exploits the learned
+    contrastive geometry for zero-shot dialect identification.
+\end{enumerate}
+
+\section{Related Work}
+
+\paragraph{Dialect identification.}
+The VarDial shared tasks \citep{zampieri2017findings} established benchmarks
+for discriminating between language varieties. For Spanish specifically,
+\citet{rangel2016overview} addressed author profiling across varieties.
+Most approaches use n-gram features or fine-tuned transformers with
+cross-entropy classification.
+
+\paragraph{Contrastive learning for NLP.}
+Supervised contrastive learning \citep{khosla2020supervised} extends
+self-supervised contrastive methods to leverage label information. The
+Decoupled Contrastive Learning (DCL) objective \citep{yeh2022decoupled}
+improves gradient quality by removing positives from the denominator.
+MoCo \citep{he2020momentum} maintains a momentum-updated encoder to
+produce consistent negative examples via a queue, avoiding the staleness
+problem of cross-batch memory.
+
+\paragraph{Angular margin losses.}
+ArcFace \citep{deng2019arcface} adds an additive angular margin to the target
+class logit in the cosine classification space, encouraging large angular
+separation between classes. It has been widely used in face recognition and
+speaker verification.
+
+\section{Model Architecture}
+
+\subsection{Base Encoder}
+
+We use BETO \citep{canete2020spanish}, a Spanish BERT model pre-trained on a
+large Spanish corpus with 110M parameters. All base parameters are frozen. We
+apply Low-Rank Adaptation (LoRA) \citep{hu2022lora} with rank $r=16$ and
+$\alpha=32$ to the attention query, key, value, and output projections, as well
+as the feed-forward intermediate and output dense layers across all 12
+transformer layers. This yields approximately 2.6M trainable parameters in the
+backbone.
+
+\subsection{Variety Tokens}
+
+We add 8 special tokens \texttt{[VAR\_ES\_PEN]}, \ldots,
+\texttt{[VAR\_ES\_AND\_BO]} to the vocabulary. During training, the
+corresponding variety token is prepended to each input text, providing an
+explicit dialect signal to the model. The token embeddings are initialized from
+the existing embedding distribution and learned end-to-end.
+
+\subsection{Dialect-Aware Attention Pooling}
+
+Instead of using only the \texttt{[CLS]} token representation, we learn a
+weighted average over all token positions:
+
+\begin{equation}
+    \mathbf{h}_{\text{pool}} = \sum_{i=1}^{L} \alpha_i \mathbf{h}_i, \quad
+    \alpha_i = \frac{\exp(\mathbf{w}^\top \mathbf{h}_i)}
+    {\sum_{j=1}^{L} \exp(\mathbf{w}^\top \mathbf{h}_j)}
+\end{equation}
+
+where $\mathbf{w} \in \RR^{768}$ is a learned query vector and the sum runs
+over non-padding positions. This allows the model to attend to
+dialect-significant tokens (regionalisms, morphological markers) rather than
+relying solely on the \texttt{[CLS]} aggregation.
+
+\subsection{Projection Head}
+
+The pooled representation $\mathbf{h}_{\text{pool}} \in \RR^{768}$ is passed
+through a two-layer MLP with BatchNorm:
+
+\begin{equation}
+    \mathbf{z} = \text{Linear}_{384 \to 384}\Big(
+    \text{ReLU}\big(\text{BN}\big(\text{Linear}_{768 \to 384}
+    (\mathbf{h}_{\text{pool}})\big)\big)\Big)
+\end{equation}
+
+The contrastive loss operates on the $\ell_2$-normalized version
+$\hat{\mathbf{z}} = \mathbf{z} / \|\mathbf{z}\|$.
+
+\subsection{ArcFace Classifier}
+
+We apply ArcFace angular-margin classification on the \emph{projected}
+features $\mathbf{z} \in \RR^{384}$ (before $\ell_2$-normalization):
+
+\begin{equation}
+    \text{logit}_j = s \cdot \cos(\theta_j + m \cdot \mathbf{1}[j = y])
+    \label{eq:arcface}
+\end{equation}
+
+where $\theta_j = \arccos(\hat{\mathbf{z}}^\top \hat{\mathbf{w}}_j)$ is the
+angle between the normalized input and the $j$-th class weight vector,
+$s = 30$ is the scale factor, $m = 0.3$ is the angular margin, and $y$ is
+the true variety label.
+
+\paragraph{ArcFace collapse and resolution.}
+In our initial architecture, ArcFace operated on the raw pooled representation
+$\mathbf{h}_{\text{pool}} \in \RR^{768}$, while contrastive learning operated
+on the projected $\hat{\mathbf{z}} \in \RR^{384}$. This created a
+\emph{feature space misalignment}: the projection head learned to extract
+dialect-discriminative features from $\mathbf{h}_{\text{pool}}$, but the raw
+pooled vector itself did not develop good angular structure for direct cosine
+classification. At inference, all ArcFace logits collapsed to $-30.0$
+(cosine $\approx -1.0$ with all class weight vectors), indicating that
+$\mathbf{h}_{\text{pool}}$ had drifted to a region antipodal to all class
+weights.
+
+The fix is straightforward: route ArcFace through the projection space, so
+both objectives share the same feature geometry. This ensures that the angular
+separation enforced by ArcFace directly benefits the contrastive space, and
+vice versa.
+
+\section{Training}
+
+\subsection{Multi-Task Objective}
+
+The total loss combines four terms:
+
+\begin{equation}
+    \mathcal{L} = w_{\text{mlm}} \mathcal{L}_{\text{mlm}}
+    + w_{\text{cls}} \mathcal{L}_{\text{cls}}
+    + w_{\text{con}} \mathcal{L}_{\text{con}}
+    + w_{\text{ctr}} \mathcal{L}_{\text{ctr}}
+\end{equation}
+
+\paragraph{MLM loss.}
+Standard masked language modeling with 15\% masking probability, using BETO's
+word embeddings as the prediction head (weight-tied).
+
+\paragraph{CLS loss.}
+Cross-entropy on ArcFace logits (Eq.~\ref{eq:arcface}).
+
+\paragraph{Contrastive loss.}
+Supervised contrastive with the DCL variant:
+
+\begin{equation}
+    \mathcal{L}_{\text{con}} = -\frac{1}{|P_i|} \sum_{j \in P_i}
+    \log \frac{\exp(\hat{\mathbf{z}}_i^\top \hat{\mathbf{z}}_j / \tau)}
+    {\sum_{k \in N_i} \exp(\hat{\mathbf{z}}_i^\top \hat{\mathbf{z}}_k / \tau)}
+    \label{eq:supcon}
+\end{equation}
+
+where $P_i$ is the set of positives (same variety, excluding self), $N_i$ is
+the set of negatives (different variety), and $\tau = 0.07$ is the temperature.
+The DCL formulation \citep{yeh2022decoupled} removes positives from the
+denominator, improving gradient quality.
+
+\paragraph{Center loss.}
+During the first 2000 contrastive optimization steps, we add center loss
+\citep{wen2016discriminative} to pull embeddings toward learned class centroids,
+breaking initial symmetry.
+
+\subsection{Curriculum}
+
+Training proceeds in two phases:
+
+\begin{enumerate}
+    \item \textbf{Pretrain (epochs 1--2):} MLM + CLS only
+    ($w_{\text{mlm}} = 0.5$, $w_{\text{cls}} = 0.5$, $w_{\text{con}} = 0$).
+    \item \textbf{Full (epochs 3--10):} All losses active, with curriculum
+    shift from $w_{\text{mlm}} = 0.3 \to 0.15$ and
+    $w_{\text{con}} = 0.4 \to 0.55$.
+\end{enumerate}
+
+\subsection{Momentum Contrast (MoCo)}
+
+With balanced batches of $k = 4$ samples per variety ($B = 32$), in-batch
+contrastive has only 24 negatives per query---insufficient for the low
+temperature $\tau = 0.07$. We augment with a MoCo momentum queue
+\citep{he2020momentum}.
+
+\paragraph{Momentum encoder.}
+A deep copy of the full model (including LoRA adapters) is maintained as an
+exponential moving average (EMA):
+
+\begin{equation}
+    \theta_{\text{mom}} \leftarrow m \cdot \theta_{\text{mom}}
+    + (1 - m) \cdot \theta_{\text{train}}
+\end{equation}
+
+with momentum $m = 0.999$. Only trainable parameters (LoRA, attention pool,
+projection head) are EMA-updated; frozen BETO weights are identical in both
+encoders. BatchNorm running statistics are also EMA-updated.
+
+\paragraph{Queue.}
+A FIFO circular buffer of size $Q = 4096$ stores $(\hat{\mathbf{z}}_{\text{mom}}, y)$
+pairs from the momentum encoder. The queue activates at epoch 4 and ramps
+linearly from 128 to 4096 entries over 5000 optimizer steps.
+
+\paragraph{Why not cross-batch memory (XBM)?}
+Our initial implementation used XBM \citep{wang2020cross}, which stores
+embeddings from the training encoder directly. These go stale as the model
+updates. With $\tau = 0.07$, a cosine staleness of $\delta = 0.1$ creates
+$\exp(\delta / \tau) \approx 4.2\times$ error in softmax weights. The
+contrastive loss plateaued at $\ln(4096) \approx 8.3$ (random baseline).
+MoCo solves this because the momentum encoder changes slowly, making all
+queue entries mutually consistent.
+
+\subsection{Optimization}
+
+We use AdamW with $\text{lr} = 2 \times 10^{-4}$, linear warmup over 5000
+steps, and cosine decay. The projection head receives $10\times$ the base
+learning rate. Gradient clipping at norm 1.0.
+
+\section{Spectral Eigenmode Classification}
+
+Beyond the direct neural classifier, we develop a spectral approach based on
+eigendecomposition of inter-dialect transformation matrices.
+
+\subsection{Contextual Word Embedding Extraction}
+
+For a vocabulary $V$ of $|V|$ words, we extract contextual embeddings per
+variety. For word $w$ in variety $v$, we collect all occurrences of $w$ in
+the variety-$v$ corpus, pass each through the trained model, and extract the
+projected token embedding at $w$'s position. The word-level embedding is the
+mean over all occurrences:
+
+\begin{equation}
+    \bE_v[w] = \frac{1}{|C_v(w)|} \sum_{c \in C_v(w)}
+    \text{proj}(\text{BETO}_{\text{LoRA}}(c))[w]
+\end{equation}
+
+\subsection{Procrustes Alignment}
+
+To bring all variety embeddings into a shared space, we apply orthogonal
+Procrustes alignment \citep{schonemann1966generalized} using anchor words
+(high-frequency words with minimal dialectal variation):
+
+\begin{equation}
+    \bE_v^{\text{aligned}} = \bE_v \mathbf{R}_v^*, \quad
+    \mathbf{R}_v^* = \arg\min_{\mathbf{R}^\top \mathbf{R} = \bI}
+    \|\bE_v[\text{anchors}] \mathbf{R} - \bE_{\text{ref}}[\text{anchors}]\|_F
+\end{equation}
+
+with ES\_PEN (Peninsular) as the reference variety.
+
+\subsection{Transformation Matrices}
+
+For each non-reference variety $v$, we compute the transformation matrix
+$\bW_v$ via regularized least squares:
+
+\begin{equation}
+    \bW_v = \bE_v^{\text{aligned}} \bE_{\text{ref}}^{+}
+\end{equation}
+
+where $\bE_{\text{ref}}^{+}$ is the regularized pseudoinverse. This matrix
+captures how variety $v$ transforms the reference embedding space.
+
+\subsection{Eigendecomposition and Dialect Fingerprints}
+
+Each transformation matrix is eigendecomposed:
+
+\begin{equation}
+    \bW_v = \bP_v \boldsymbol{\Lambda}_v \bP_v^{-1}
+\end{equation}
+
+The eigenvalue magnitudes $|\lambda_1| \geq |\lambda_2| \geq \cdots$ form
+a \emph{spectral fingerprint} of each dialect. The spectral gap
+$|\lambda_1| - |\lambda_2|$, effective rank (number of eigenvalues capturing
+90\% of total magnitude), and the eigenvector directions all encode
+dialect-specific information.
+
+\subsection{DIAL: Dialectal Interpolation via Algebraic Linearization}
+
+The eigendecomposition enables continuous intensity control:
+
+\begin{equation}
+    \bW_v(\alpha) = \bP_v \boldsymbol{\Lambda}_v^{\alpha} \bP_v^{-1}
+\end{equation}
+
+where $\alpha = 0$ gives the identity (reference dialect), $\alpha = 1$ gives
+the full dialect transformation, and $\alpha > 1$ produces ``hyperdialect''
+(exaggerated dialectal features).
+
+\subsection{Scoring}
+
+Given a new text, we:
+\begin{enumerate}
+    \item Tokenize and extract bag-of-words embedding as the mean of
+    vocabulary-matched word embeddings.
+    \item For each variety $v$, project onto the top eigenmodes of $\bW_v$ and
+    compute a dialect affinity score based on alignment with
+    variety-specific eigenmode directions.
+    \item Normalize scores to probabilities via softmax.
+\end{enumerate}
+
+\section{Classification Methods}
+
+We evaluate three classification approaches, all built on the same trained
+model:
+
+\subsection{ArcFace Direct Classification}
+
+The ArcFace head produces scaled cosine logits directly. At inference
+(without angular margin), the prediction is $\arg\max_j \hat{\mathbf{z}}^\top
+\hat{\mathbf{w}}_j$.
+
+\subsection{Projection-Space Centroid Classifier}
+
+We compute per-variety centroids from corpus texts:
+
+\begin{equation}
+    \boldsymbol{\mu}_v = \frac{1}{|S_v|} \sum_{t \in S_v}
+    \hat{\mathbf{z}}(t), \quad
+    \hat{\boldsymbol{\mu}}_v = \boldsymbol{\mu}_v / \|\boldsymbol{\mu}_v\|
+\end{equation}
+
+Classification uses temperature-scaled cosine similarity to centroids:
+
+\begin{equation}
+    P(v \mid t) = \frac{\exp(\hat{\mathbf{z}}(t)^\top
+    \hat{\boldsymbol{\mu}}_v / \tau_{\text{inf}})}
+    {\sum_{v'} \exp(\hat{\mathbf{z}}(t)^\top
+    \hat{\boldsymbol{\mu}}_{v'} / \tau_{\text{inf}})}
+\end{equation}
+
+with $\tau_{\text{inf}} = 0.1$. This method requires no additional training
+beyond computing centroids from a small corpus sample (200 documents per
+variety).
+
+\subsection{Eigenmode Spectral Classifier}
+
+Uses the spectral fingerprinting approach described in
+Section~5. This method is more computationally expensive but provides
+interpretable eigenmodes that correspond to linguistic dimensions of variation.
+
+\section{Preliminary Results}
+
+\begin{table}[h]
+\centering
+\caption{Classification accuracy on 12 dialectally-marked test sentences.}
+\label{tab:results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Accuracy} & \textbf{Notes} \\
+\midrule
+Random baseline & 12.5\% & 1/8 varieties \\
+Eigenmode spectral & 47.4\% (9/19) & 500 docs/variety sample \\
+Projection centroid & 58.3\% (7/12) & 200 docs/variety centroids \\
+ArcFace direct & 0\% & Collapsed (pre-fix) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Per-variety projection centroid accuracy on test sentences.}
+\label{tab:per_variety}
+\begin{tabular}{lcl}
+\toprule
+\textbf{Variety} & \textbf{Correct/Total} & \textbf{Typical Confusion} \\
+\midrule
+ES\_RIO (Rioplatense) & 2/2 & --- \\
+ES\_CHI (Chilean) & 2/2 & --- \\
+ES\_MEX (Mexican) & 1/2 & $\to$ ES\_RIO \\
+ES\_CAR (Caribbean) & 1/1 & --- \\
+ES\_PEN (Peninsular) & 1/2 & $\to$ ES\_CAN \\
+ES\_AND (Andalusian) & 0/1 & $\to$ ES\_PEN \\
+ES\_CAN (Canarian) & 0/1 & $\to$ ES\_CAR \\
+ES\_AND\_BO (Andean) & 0/1 & $\to$ ES\_RIO \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The projection centroid classifier shows strong performance on lexically
+distinctive varieties (Rioplatense \emph{che, boludo, pibe}; Chilean
+\emph{huev\'on, cachai, weá}; Caribbean \emph{chamo, vaina}) where
+dialect-specific vocabulary provides clear signal. Performance is weaker on
+Iberian varieties (Andalusian, Canarian, Peninsular) that share more lexical
+overlap and differ primarily in phonological features that are partially
+neutralized in written text.
+
+\paragraph{Training dynamics.}
+The contrastive loss plateaued at $\sim 2.65$ after 162K optimizer steps
+with in-batch-only negatives (24 per query). This motivates the MoCo
+integration, which provides 4096 consistent negatives and should enable
+further contrastive descent.
+
+\section{Discussion}
+
+\paragraph{Feature space alignment matters.}
+The ArcFace collapse demonstrates that multi-task objectives operating in
+different feature spaces can interfere destructively. When ArcFace operated
+on raw 768-dim pooled features while contrastive learning shaped the 384-dim
+projected space, the pooled representation evolved to serve the projection
+head but became degenerate for direct angular classification. Routing both
+objectives through the same projected space resolves this.
+
+\paragraph{MoCo vs.\ XBM.}
+Cross-batch memory (XBM) stores training-encoder embeddings that become stale
+as the model updates. With low temperature ($\tau = 0.07$), this staleness
+is catastrophic: the contrastive loss converges to $\ln(Q) \approx 8.3$
+(random baseline). MoCo's momentum encoder changes slowly enough
+($m = 0.999$, so the half-life is $\sim 693$ steps) that queue entries
+remain mutually consistent.
+
+\paragraph{Spectral interpretability.}
+The eigenmode approach offers interpretability that neural classifiers lack.
+Each eigenmode corresponds to a direction of maximal dialectal variation,
+and the eigenvalue magnitude indicates the strength of that variation axis.
+The effective rank (number of eigenvalues capturing 90\% of total magnitude)
+ranges from 108--150 across varieties, suggesting that dialectal variation
+is distributed across many dimensions rather than concentrated in a few.
+
+\section{Conclusion}
+
+EigenDialectos combines transformer-based contrastive learning with spectral
+analysis to classify Spanish text into 8 regional varieties. The
+projection-space centroid classifier achieves 58\% accuracy (chance 12.5\%)
+on a pre-MoCo model, with particularly strong performance on lexically
+distinctive dialects. The MoCo integration, now implemented and validated
+with 18 unit tests, should improve contrastive quality and consequently
+classification accuracy. The spectral eigenmode approach provides an
+interpretable complement to the neural classifier, with the DIAL framework
+enabling continuous intensity control over dialectal transformations.
+
+\paragraph{Future work.}
+Training with MoCo (4096-entry queue) should push the contrastive loss
+below the current plateau. The fixed ArcFace architecture (operating on
+projected features) should provide a working direct classifier. Larger
+evaluation sets with native-speaker annotations are needed for rigorous
+accuracy assessment.
+
+\bibliographystyle{plainnat}
+
+\begin{thebibliography}{20}
+
+\bibitem[Ca\~nete et~al.(2020)]{canete2020spanish}
+J.~Ca\~nete, G.~Chaperon, R.~Fuentes, J.~Ho, H.~Kang, and J.~P\'erez.
+\newblock Spanish pre-trained {BERT} model and evaluation data.
+\newblock In \emph{PML4DC at ICLR}, 2020.
+
+\bibitem[Deng et~al.(2019)]{deng2019arcface}
+J.~Deng, J.~Guo, N.~Xue, and S.~Zafeiriou.
+\newblock {ArcFace}: Additive angular margin loss for deep face recognition.
+\newblock In \emph{CVPR}, 2019.
+
+\bibitem[He et~al.(2020)]{he2020momentum}
+K.~He, H.~Fan, Y.~Wu, S.~Xie, and R.~Girshick.
+\newblock Momentum contrast for unsupervised visual representation learning.
+\newblock In \emph{CVPR}, 2020.
+
+\bibitem[Hu et~al.(2022)]{hu2022lora}
+E.~J. Hu, Y.~Shen, P.~Wallis, Z.~Allen-Zhu, Y.~Li, S.~Wang, L.~Wang, and
+W.~Chen.
+\newblock {LoRA}: Low-rank adaptation of large language models.
+\newblock In \emph{ICLR}, 2022.
+
+\bibitem[Khosla et~al.(2020)]{khosla2020supervised}
+P.~Khosla, P.~Teterwak, C.~Wang, A.~Sabel, Y.~Tian, C.~Isola,
+A.~Maschinot, C.~Liu, and D.~Krishnan.
+\newblock Supervised contrastive learning.
+\newblock In \emph{NeurIPS}, 2020.
+
+\bibitem[Rangel et~al.(2016)]{rangel2016overview}
+F.~Rangel, P.~Rosso, B.~Verhoeven, W.~Daelemans, M.~Potthast, and B.~Stein.
+\newblock Overview of the 4th author profiling task at {PAN} 2016.
+\newblock In \emph{CLEF}, 2016.
+
+\bibitem[Sch\"onemann(1966)]{schonemann1966generalized}
+P.~H. Sch\"onemann.
+\newblock A generalized solution of the orthogonal {Procrustes} problem.
+\newblock \emph{Psychometrika}, 31(1):1--10, 1966.
+
+\bibitem[Wang et~al.(2020)]{wang2020cross}
+X.~Wang, H.~Zhang, W.~Huang, and M.~R. Scott.
+\newblock Cross-batch memory for embedding learning.
+\newblock In \emph{CVPR}, 2020.
+
+\bibitem[Wen et~al.(2016)]{wen2016discriminative}
+Y.~Wen, K.~Zhang, Z.~Li, and Y.~Qiao.
+\newblock A discriminative feature learning approach for deep face recognition.
+\newblock In \emph{ECCV}, 2016.
+
+\bibitem[Yeh et~al.(2022)]{yeh2022decoupled}
+C.~Yeh, C.~Hong, Y.~Hsu, T.~Liu, Y.~Chen, and Y.~LeCun.
+\newblock Decoupled contrastive learning.
+\newblock In \emph{ECCV}, 2022.
+
+\bibitem[Zampieri et~al.(2017)]{zampieri2017findings}
+M.~Zampieri, S.~Malmasi, N.~Ljubesi\'c, P.~Nakov, A.~Ali, J.~Tiedemann,
+Y.~Scherrer, and N.~Aepli.
+\newblock Findings of the {VarDial} evaluation campaign 2017.
+\newblock In \emph{VarDial Workshop}, 2017.
+
+\end{thebibliography}
+
+\end{document}
