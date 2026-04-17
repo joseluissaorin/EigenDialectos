@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore")
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 STEP_LOG = PROJECT_DIR / "outputs" / "eigen3" / "step_log.jsonl"
 REPORT_DIR = PROJECT_DIR / "outputs" / "reports"
-PID = 52553
+PID = 93558
 V2_CON = 7.92
 
 CLAUDE_PROMPT = (
@@ -30,13 +30,15 @@ CLAUDE_PROMPT = (
     "(8 Spanish dialect embeddings, BETO+LoRA). "
     "Key architecture context: "
     "- Two-phase training: epochs 1-2 are pretrain (MLM+CLS only, con=0 by design), "
-    "epochs 3+ activate SupCon contrastive. "
-    "- XBM was disabled at step 71000 (caused contrastive to spike to ~8.0 due to "
-    "staleness incompatibility with softmax losses). Training resumed from checkpoint "
-    "with --xbm-size 0. Contrastive should drop from ~8.0 back to ~3.0 within ~500 steps "
-    "then continue descending with in-batch-only negatives (24 per batch). "
-    "- ArcFace classifier (s=30, m=0.3) means CLS starts high (~11) and converges ~0.5-1.0. "
-    "- v2 baseline had contrastive stuck at 7.92 forever. Any descent below 3.5 means v3 works. "
+    "epochs 3+ activate SupCon contrastive with MoCo momentum queue. "
+    "- MoCo replaces the broken XBM cross-batch memory. Momentum encoder (m=0.999) "
+    "provides consistent queue entries. Queue of 4096 entries activates at epoch 4, "
+    "ramps from 128 to 4096 over 5000 steps. "
+    "- ArcFace classifier now operates on projected features (384-dim) instead of "
+    "raw pooled (768-dim). Previous run had ArcFace collapse (all logits=-30). "
+    "- ArcFace (s=30, m=0.3) means CLS starts high (~11) and should converge ~0.5-1.0. "
+    "- Previous run (no MoCo) plateaued at contrastive=2.65 with only 24 in-batch negatives. "
+    "MoCo should push contrastive significantly lower. "
     "- MLM floor is ~2.0 (shared capacity with other objectives + dialectal corpus noise). "
     "- Center loss is only active for the first 2000 contrastive steps, then disables (0.0 is normal). "
     "- Batch noise: MLM and CLS fluctuate ~0.05-0.10 between logged steps. Small deltas are noise. "
@@ -111,7 +113,7 @@ def build_text_report(lines: list[dict], status: str) -> tuple[str, dict]:
     ep4_step = 3 * steps_per_epoch
     current_step = d["global_step"]
     contrastive_active = current_step >= ep3_step
-    xbm_active = current_step >= ep4_step
+    moco_active = current_step >= ep4_step
 
     rate = current_step / d["run_elapsed_s"]
     remaining_s = (total_steps - current_step) / rate
@@ -143,11 +145,11 @@ def build_text_report(lines: list[dict], status: str) -> tuple[str, dict]:
     p("")
     p("PHASE STATUS")
     p(f"  Contrastive: {'ACTIVE since step ' + str(ep3_step) if contrastive_active else 'activates at step ' + str(ep3_step)}")
-    p(f"  XBM queue:   {'ACTIVE since step ' + str(ep4_step) if xbm_active else 'activates at step ' + str(ep4_step)}")
-    if not xbm_active and contrastive_active:
-        xbm_remaining = (ep4_step - current_step) / rate / 3600
-        xbm_time = now + timedelta(hours=xbm_remaining)
-        p(f"  XBM activates in {xbm_remaining:.1f}h ({xbm_time.strftime('%a %b %d %H:%M')})")
+    p(f"  MoCo queue:   {'ACTIVE since step ' + str(ep4_step) if moco_active else 'activates at step ' + str(ep4_step)}")
+    if not moco_active and contrastive_active:
+        moco_remaining = (ep4_step - current_step) / rate / 3600
+        moco_time = now + timedelta(hours=moco_remaining)
+        p(f"  MoCo activates in {moco_remaining:.1f}h ({moco_time.strftime('%a %b %d %H:%M')})")
 
     # Contrastive trajectory
     con_steps_arr = np.array([])
@@ -232,8 +234,8 @@ def build_text_report(lines: list[dict], status: str) -> tuple[str, dict]:
         "End epoch 7": 7 * steps_per_epoch,
         "End training": total_steps,
     }
-    if not xbm_active:
-        milestones["XBM activation (ep4)"] = ep4_step
+    if not moco_active:
+        milestones["MoCo activation (ep4)"] = ep4_step
 
     mlm_coeffs = cls_coeffs = lin_coeffs = None
 
@@ -268,10 +270,10 @@ def build_text_report(lines: list[dict], status: str) -> tuple[str, dict]:
         lin_coeffs, _, _, _ = np.linalg.lstsq(A_lin, con_vals, rcond=None)
         rate_per_1k = lin_coeffs[0] * 1000
 
-        p(f"\n  Contrastive projections (linear model, pre-XBM):")
+        p(f"\n  Contrastive projections (linear model, pre-MoCo):")
         p(f"    Current descent rate: {rate_per_1k:+.4f} per 1000 steps")
         if rate_per_1k < 0:
-            p(f"    (Note: rate will likely accelerate when XBM activates with 4096 negatives)")
+            p(f"    (Note: rate will likely accelerate when MoCo activates with 4096 negatives)")
 
         for label, step in sorted(milestones.items(), key=lambda x: x[1]):
             pred = lin_coeffs[0] * step + lin_coeffs[1]
@@ -279,7 +281,7 @@ def build_text_report(lines: list[dict], status: str) -> tuple[str, dict]:
             p(f"    {label:25s} (step {step:>7d}, {eta_time.strftime('%a %b %d %H:%M')}): CON \u2248 {max(0, pred):.3f}")
 
         if lin_coeffs[0] < 0:
-            p(f"\n  Contrastive milestone estimates (linear, conservative \u2014 XBM will accelerate):")
+            p(f"\n  Contrastive milestone estimates (linear, conservative \u2014 MoCo will accelerate):")
             for target, label in [(2.5, "CON < 2.5"), (2.0, "CON < 2.0"), (1.0, "CON < 1.0"), (0.5, "CON < 0.5")]:
                 step_at = (target - lin_coeffs[1]) / lin_coeffs[0]
                 if current_step < step_at < total_steps * 2:
@@ -289,7 +291,7 @@ def build_text_report(lines: list[dict], status: str) -> tuple[str, dict]:
                 elif step_at <= current_step:
                     p(f"    {label}: already reached")
                 else:
-                    p(f"    {label}: not reachable at current rate (XBM should fix this)")
+                    p(f"    {label}: not reachable at current rate (MoCo should fix this)")
 
     p(f"\n  Throughput statistics:")
     p(f"    Current: {sps[-1]:.1f} sm/s")
@@ -302,7 +304,7 @@ def build_text_report(lines: list[dict], status: str) -> tuple[str, dict]:
         steps=steps, mlm=mlm, cls_=cls_, con=con, ctr=ctr, sps=sps, mps=mps,
         steps_per_epoch=steps_per_epoch, total_steps=total_steps,
         ep3_step=ep3_step, ep4_step=ep4_step, current_step=current_step,
-        contrastive_active=contrastive_active, xbm_active=xbm_active,
+        contrastive_active=contrastive_active, moco_active=moco_active,
         epoch_boundaries=epoch_boundaries, d=d,
         con_steps_arr=con_steps_arr, con_vals=con_vals,
         mlm_coeffs=mlm_coeffs, cls_coeffs=cls_coeffs, lin_coeffs=lin_coeffs,
@@ -325,7 +327,7 @@ def generate_figures(ctx: dict, fig_dir: Path) -> list[Path]:
         return []
 
     C_MLM, C_CLS, C_CON = "#3278C8", "#DC5028", "#28A03C"
-    C_CTR, C_PHASE, C_XBM = "#B464C8", "#CCCCCC", "#FF8C00"
+    C_CTR, C_PHASE, C_MOCO = "#B464C8", "#CCCCCC", "#FF8C00"
 
     steps = ctx["steps"]
     mlm, cls_, con, ctr = ctx["mlm"], ctx["cls_"], ctx["con"], ctx["ctr"]
@@ -345,7 +347,7 @@ def generate_figures(ctx: dict, fig_dir: Path) -> list[Path]:
     def phase_decor(ax):
         ax.axvspan(0, ep3_step, alpha=0.06, color="blue")
         ax.axvline(ep3_step, color=C_PHASE, ls="--", lw=1, alpha=0.7)
-        ax.axvline(ep4_step, color=C_XBM, ls="--", lw=1, alpha=0.5)
+        ax.axvline(ep4_step, color=C_MOCO, ls="--", lw=1, alpha=0.5)
         for eb in epoch_boundaries:
             if eb != ep3_step:
                 ax.axvline(eb, color="#EEEEEE", ls=":", lw=0.5)
@@ -372,7 +374,7 @@ def generate_figures(ctx: dict, fig_dir: Path) -> list[Path]:
                  color=C_MLM, ls="--", lw=1, alpha=0.5, label="MLM projected")
     ax1.legend(loc="upper right", fontsize=9)
     ax1.text(ep3_step, ax1.get_ylim()[1] * 0.95, " SupCon ON", fontsize=8, color="gray", va="top")
-    ax1.text(ep4_step, ax1.get_ylim()[1] * 0.95, " XBM ON", fontsize=8, color=C_XBM, va="top")
+    ax1.text(ep4_step, ax1.get_ylim()[1] * 0.95, " MoCo ON", fontsize=8, color=C_MOCO, va="top")
 
     s_sm2, c_sm = smooth_steps(steps, 30), smooth(cls_, 30)
     ax2.plot(s_sm2, c_sm, color=C_CLS, lw=1.5, label="CLS (ArcFace)")
@@ -400,7 +402,7 @@ def generate_figures(ctx: dict, fig_dir: Path) -> list[Path]:
     ax3.set_ylim(bottom=0)
     ax3.legend(loc="upper right", fontsize=9)
     ax3.text(ep3_step, ax3.get_ylim()[1] * 0.95, " SupCon ON", fontsize=8, color="gray", va="top")
-    ax3.text(ep4_step, ax3.get_ylim()[1] * 0.95, " XBM ON", fontsize=8, color=C_XBM, va="top")
+    ax3.text(ep4_step, ax3.get_ylim()[1] * 0.95, " MoCo ON", fontsize=8, color=C_MOCO, va="top")
     ax3.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f"{x/1000:.0f}k"))
 
     plt.tight_layout()
@@ -422,8 +424,8 @@ def generate_figures(ctx: dict, fig_dir: Path) -> list[Path]:
             future = np.linspace(con_steps_arr[-1], min(con_steps_arr[-1] + 30000, total_steps), 50)
             ax.plot(future, np.maximum(lin_coeffs[0] * future + lin_coeffs[1], 0),
                     color=C_CON, ls="--", lw=1.5, alpha=0.5, label="Linear projection")
-        if not ctx["xbm_active"]:
-            ax.axvline(ep4_step, color=C_XBM, ls="--", lw=2, label=f"XBM activates (step {ep4_step:,})")
+        if not ctx["moco_active"]:
+            ax.axvline(ep4_step, color=C_MOCO, ls="--", lw=2, label=f"MoCo activates (step {ep4_step:,})")
         ax.axhspan(0, 1.0, alpha=0.05, color="green")
         ax.axhspan(1.0, 2.0, alpha=0.03, color="yellow")
         ax.text(ax.get_xlim()[1] * 0.98, 0.5, "Excellent", ha="right", fontsize=9, color="green", alpha=0.5)
@@ -471,7 +473,7 @@ def generate_figures(ctx: dict, fig_dir: Path) -> list[Path]:
     ax.barh(0, 1 - progress, left=progress, height=0.4, color="#EEEEEE", alpha=0.7, label="Remaining")
     markers = [
         (ep3_step / total_steps, "SupCon ON", C_CON),
-        (ep4_step / total_steps, "XBM ON", C_XBM),
+        (ep4_step / total_steps, "MoCo ON", C_MOCO),
     ]
     for i in range(1, 11):
         markers.append((i * steps_per_epoch / total_steps, f"Ep {i+1}", "#AAAAAA"))

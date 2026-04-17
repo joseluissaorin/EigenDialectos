@@ -18,7 +18,7 @@ FIGURE_DIR="$REPORT_DIR/figures_${TIMESTAMP}"
 mkdir -p "$FIGURE_DIR"
 
 # 1. Check if training is still running
-PID=90158
+PID=93558
 if ps -p $PID > /dev/null 2>&1; then
     ELAPSED=$(ps -p $PID -o etime= | xargs)
     STATUS="RUNNING (PID $PID, elapsed $ELAPSED)"
@@ -67,7 +67,7 @@ ep3_step = 2 * steps_per_epoch
 ep4_step = 3 * steps_per_epoch
 current_step = d['global_step']
 contrastive_active = current_step >= ep3_step
-xbm_active = current_step >= ep4_step
+moco_active = current_step >= ep4_step
 
 rate = current_step / d['run_elapsed_s']
 remaining_s = (total_steps - current_step) / rate
@@ -97,11 +97,11 @@ print(f"  Total:        {d['loss']['total']:.3f}")
 print()
 print(f"PHASE STATUS")
 print(f"  Contrastive: {'ACTIVE since step ' + str(ep3_step) if contrastive_active else 'activates at step ' + str(ep3_step)}")
-print(f"  XBM queue:   {'ACTIVE since step ' + str(ep4_step) if xbm_active else 'activates at step ' + str(ep4_step)}")
-if not xbm_active and contrastive_active:
-    xbm_remaining = (ep4_step - current_step) / rate / 3600
-    xbm_time = datetime.datetime.now() + datetime.timedelta(hours=xbm_remaining)
-    print(f"  XBM activates in {xbm_remaining:.1f}h ({xbm_time.strftime('%a %b %d %H:%M')})")
+print(f"  MoCo queue:   {'ACTIVE since step ' + str(ep4_step) if moco_active else 'activates at step ' + str(ep4_step)}")
+if not moco_active and contrastive_active:
+    moco_remaining = (ep4_step - current_step) / rate / 3600
+    moco_time = datetime.datetime.now() + datetime.timedelta(hours=moco_remaining)
+    print(f"  MoCo activates in {moco_remaining:.1f}h ({moco_time.strftime('%a %b %d %H:%M')})")
 
 # --- Contrastive trajectory ---
 if contrastive_active:
@@ -196,8 +196,8 @@ if stable_mask.sum() >= 10:
         'End epoch 7': 7 * steps_per_epoch,
         'End training': total_steps,
     }
-    if not xbm_active:
-        milestones['XBM activation (ep4)'] = ep4_step
+    if not moco_active:
+        milestones['MoCo activation (ep4)'] = ep4_step
 
     print(f"\n  MLM projections (log-decay model):")
     for label, step in sorted(milestones.items(), key=lambda x: x[1]):
@@ -233,10 +233,10 @@ if contrastive_active and len(con_vals) >= 20:
     # Rate of descent per 1000 steps
     rate_per_1k = lin_coeffs[0] * 1000
 
-    print(f"\n  Contrastive projections (linear model, pre-XBM):")
+    print(f"\n  Contrastive projections (linear model, pre-MoCo):")
     print(f"    Current descent rate: {rate_per_1k:+.4f} per 1000 steps")
     if rate_per_1k < 0:
-        print(f"    (Note: rate will likely accelerate when XBM activates with 4096 negatives)")
+        print(f"    (Note: rate will likely accelerate when MoCo activates with 4096 negatives)")
 
     for label, step in sorted(milestones.items(), key=lambda x: x[1]):
         pred = lin_coeffs[0] * step + lin_coeffs[1]
@@ -246,7 +246,7 @@ if contrastive_active and len(con_vals) >= 20:
 
     # Estimate when contrastive hits milestones
     if lin_coeffs[0] < 0:
-        print(f"\n  Contrastive milestone estimates (linear, conservative — XBM will accelerate):")
+        print(f"\n  Contrastive milestone estimates (linear, conservative — MoCo will accelerate):")
         for target, label in [(2.5, "CON < 2.5"), (2.0, "CON < 2.0"), (1.0, "CON < 1.0"), (0.5, "CON < 0.5")]:
             step_at = (target - lin_coeffs[1]) / lin_coeffs[0]
             if step_at > current_step and step_at < total_steps * 2:
@@ -257,7 +257,7 @@ if contrastive_active and len(con_vals) >= 20:
             elif step_at <= current_step:
                 print(f"    {label}: already reached")
             else:
-                print(f"    {label}: not reachable at current rate (XBM should fix this)")
+                print(f"    {label}: not reachable at current rate (MoCo should fix this)")
 
 # Throughput stats
 print(f"\n  Throughput statistics:")
@@ -294,7 +294,7 @@ try:
     C_CON = '#28A03C'
     C_CTR = '#B464C8'
     C_PHASE = '#CCCCCC'
-    C_XBM = '#FF8C00'
+    C_MOCO = '#FF8C00'
 
     # -----------------------------------------------------------------------
     # FIGURE 1: Full training overview (3-panel)
@@ -307,7 +307,7 @@ try:
     for ax in [ax1, ax2, ax3]:
         ax.axvspan(0, ep3_step, alpha=0.06, color='blue', label='_Phase 1')
         ax.axvline(ep3_step, color=C_PHASE, ls='--', lw=1, alpha=0.7)
-        ax.axvline(ep4_step, color=C_XBM, ls='--', lw=1, alpha=0.5)
+        ax.axvline(ep4_step, color=C_MOCO, ls='--', lw=1, alpha=0.5)
         for eb in epoch_boundaries:
             if eb != ep3_step:
                 ax.axvline(eb, color='#EEEEEE', ls=':', lw=0.5)
@@ -326,7 +326,7 @@ try:
         ax1.plot(proj_steps, proj_mlm, color=C_MLM, ls='--', lw=1, alpha=0.5, label='MLM projected')
     ax1.legend(loc='upper right', fontsize=9)
     ax1.text(ep3_step, ax1.get_ylim()[1]*0.95, ' SupCon ON', fontsize=8, color='gray', va='top')
-    ax1.text(ep4_step, ax1.get_ylim()[1]*0.95, ' XBM ON', fontsize=8, color=C_XBM, va='top')
+    ax1.text(ep4_step, ax1.get_ylim()[1]*0.95, ' MoCo ON', fontsize=8, color=C_MOCO, va='top')
 
     # Panel 2: CLS
     s_sm2, c_sm = smooth_steps(steps, 30), smooth(cls, 30)
@@ -358,7 +358,7 @@ try:
     ax3.set_ylim(bottom=0)
     ax3.legend(loc='upper right', fontsize=9)
     ax3.text(ep3_step, ax3.get_ylim()[1]*0.95, ' SupCon ON', fontsize=8, color='gray', va='top')
-    ax3.text(ep4_step, ax3.get_ylim()[1]*0.95, ' XBM ON', fontsize=8, color=C_XBM, va='top')
+    ax3.text(ep4_step, ax3.get_ylim()[1]*0.95, ' MoCo ON', fontsize=8, color=C_MOCO, va='top')
 
     ax3.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: f'{x/1000:.0f}k'))
 
@@ -387,9 +387,9 @@ try:
             future_con = np.maximum(future_con, 0)
             ax.plot(future_steps, future_con, color=C_CON, ls='--', lw=1.5, alpha=0.5, label='Linear projection')
 
-        # XBM activation line
-        if not xbm_active:
-            ax.axvline(ep4_step, color=C_XBM, ls='--', lw=2, label=f'XBM activates (step {ep4_step:,})')
+        # MoCo activation line
+        if not moco_active:
+            ax.axvline(ep4_step, color=C_MOCO, ls='--', lw=2, label=f'MoCo activates (step {ep4_step:,})')
 
         # Target zones
         ax.axhspan(0, 1.0, alpha=0.05, color='green')
@@ -452,7 +452,7 @@ try:
     # Milestone markers
     markers = [
         (ep3_step/total_steps, 'SupCon ON', C_CON),
-        (ep4_step/total_steps, 'XBM ON', C_XBM),
+        (ep4_step/total_steps, 'MoCo ON', C_MOCO),
     ]
     for i in range(1, 11):
         markers.append((i*steps_per_epoch/total_steps, f'Ep {i+1}', '#AAAAAA'))
@@ -502,7 +502,7 @@ ANALYSIS=$(cat "$REPORT_FILE" | claude -p \
   "You are monitoring an ML training run for the EigenDialectos v3 project (8 Spanish dialect embeddings, BETO+LoRA). \
 Key architecture context: \
 - Two-phase training: epochs 1-2 are pretrain (MLM+CLS only, con=0 by design), epochs 3+ activate SupCon contrastive. \
-- XBM (cross-batch memory, 4096 negatives) activates at epoch 4. Before XBM, contrastive only has 24 in-batch negatives, so descent is expected to be slow. \
+- MoCo momentum queue (4096 negatives) activates at epoch 4. Before MoCo, contrastive only has 24 in-batch negatives, so descent is expected to be slow. \
 - ArcFace classifier (s=30, m=0.3) means CLS starts high (~11) and converges around 0.5-1.0. \
 - v2 baseline had contrastive stuck at 7.92 forever. Any descent below 3.5 means v3 is working. \
 - MLM floor is ~2.0 (shared capacity with other objectives + dialectal corpus noise). \
