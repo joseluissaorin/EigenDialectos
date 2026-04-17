@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EigenDialectos Explorer</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #12121a;
+    --bg3: #1a1a2e;
+    --fg: #e0e0e8;
+    --fg2: #8888a0;
+    --accent: #6366f1;
+    --border: #2a2a3e;
+    --ES_PEN: #ef4444;
+    --ES_AND: #f97316;
+    --ES_CAN: #eab308;
+    --ES_RIO: #22c55e;
+    --ES_MEX: #3b82f6;
+    --ES_CAR: #a855f7;
+    --ES_CHI: #ec4899;
+    --ES_AND_BO: #14b8a6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  header {
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    background: var(--bg2);
+  }
+  header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+  }
+  header h1 span { color: var(--accent); }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+  }
+  .tab {
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--fg2);
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+  .tab:hover { color: var(--fg); background: var(--bg3); }
+  .tab.active { color: var(--fg); background: var(--bg3); border-color: var(--border); }
+
+  .panel { display: none; padding: 24px 32px; }
+  .panel.active { display: block; }
+
+  /* Analyzer */
+  .analyzer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    max-width: 1400px;
+  }
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card h3 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg2);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 16px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 120px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--fg);
+    font-family: inherit;
+    font-size: 15px;
+    padding: 12px;
+    resize: vertical;
+    outline: none;
+    line-height: 1.6;
+  }
+  textarea:focus { border-color: var(--accent); }
+
+  /* Pretext canvas for analyzed text */
+  #analyzed-canvas {
+    width: 100%;
+    border-radius: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    cursor: default;
+  }
+
+  /* Probability bars */
+  .prob-bars { display: flex; flex-direction: column; gap: 8px; }
+  .prob-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .prob-label {
+    font-size: 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    width: 80px;
+    text-align: right;
+    color: var(--fg2);
+  }
+  .prob-track {
+    flex: 1;
+    height: 24px;
+    background: var(--bg);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .prob-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #000;
+    min-width: 0;
+  }
+
+  /* Heatmap */
+  #heatmap-canvas {
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* Eigenspace */
+  #eigenspace-canvas {
+    display: block;
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: crosshair;
+  }
+
+  /* Mode explorer */
+  .mode-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .mode-controls label { font-size: 13px; color: var(--fg2); }
+  .mode-controls select, .mode-controls input[type=range] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .word-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .word-chip {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-family: 'SF Mono', monospace;
+    border: 1px solid var(--border);
+  }
+  .word-chip.positive { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+  .word-chip.negative { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+  /* Probing matrix */
+  #probing-canvas {
+    display: block;
+    margin: 0 auto;
+    border-radius: 8px;
+  }
+
+  /* Validation */
+  .validation-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    max-width: 1400px;
+  }
+  .stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .stat-value { font-weight: 600; font-family: 'SF Mono', monospace; }
+  .stat-value.pass { color: #22c55e; }
+  .stat-value.fail { color: #ef4444; }
+  .stat-value.good { color: #eab308; }
+  .stat-value.excellent { color: #22c55e; }
+
+  .constraint-list { font-size: 13px; }
+  .constraint { padding: 6px 0; display: flex; gap: 8px; }
+  .constraint-icon { width: 18px; text-align: center; }
+
+  .full-width { grid-column: 1 / -1; }
+
+  @media (max-width: 900px) {
+    .analyzer-grid, .validation-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>Eigen</span>Dialectos Explorer</h1>
+  <div class="tabs">
+    <div class="tab active" data-panel="analyzer">Text Analyzer</div>
+    <div class="tab" data-panel="eigenspace">Eigenspace</div>
+    <div class="tab" data-panel="modes">Mode Explorer</div>
+    <div class="tab" data-panel="validation">Validation</div>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<!-- TAB 1: TEXT ANALYZER                                         -->
+<!-- ============================================================ -->
+<div id="analyzer" class="panel active">
+  <div class="analyzer-grid">
+    <div class="card">
+      <h3>Input Text</h3>
+      <textarea id="input-text" placeholder="Escribe texto en espa&#241;ol para analizar su variedad dialectal...">Che boludo, ayer fuimos al laburo en el bondi y nos encontramos con un pibe que andaba tomando mate en la vereda.</textarea>
+      <div style="margin-top:12px; font-size:12px; color:var(--fg2)">
+        Try: Mexican slang, Chilean expressions, Canarian vocabulary, Peninsular Spanish...
+      </div>
+    </div>
+    <div class="card">
+      <h3>Dialect Probabilities</h3>
+      <div id="prob-bars" class="prob-bars"></div>
+    </div>
+    <div class="card full-width">
+      <h3>Analyzed Text <span style="font-size:11px;font-weight:400;color:var(--fg2)">rendered with pretext</span></h3>
+      <canvas id="analyzed-canvas" height="200"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB 2: EIGENSPACE                                            -->
+<!-- ============================================================ -->
+<div id="eigenspace" class="panel">
+  <div class="analyzer-grid">
+    <div class="card full-width">
+      <h3>Word Embedding Eigenspace (PCA 2D projection)</h3>
+      <canvas id="eigenspace-canvas" height="600"></canvas>
+      <div id="eigenspace-tooltip" style="position:fixed;display:none;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;pointer-events:none;z-index:100"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB 3: MODE EXPLORER                                         -->
+<!-- ============================================================ -->
+<div id="modes" class="panel">
+  <div class="analyzer-grid">
+    <div class="card full-width">
+      <h3>Spectral Mode Feature Map</h3>
+      <canvas id="probing-canvas" height="400"></canvas>
+    </div>
+    <div class="card">
+      <h3>Mode Detail</h3>
+      <div class="mode-controls">
+        <label>Variety:</label>
+        <select id="mode-variety">
+          <option>ES_AND</option><option>ES_CAN</option><option>ES_RIO</option>
+          <option>ES_MEX</option><option>ES_CAR</option><option>ES_CHI</option>
+          <option>ES_AND_BO</option>
+        </select>
+        <label>Mode:</label>
+        <input type="range" id="mode-slider" min="0" max="29" value="0" style="width:200px">
+        <span id="mode-label">Mode 0</span>
+      </div>
+      <div style="margin-bottom:12px;font-size:13px;color:var(--fg2)" id="mode-info"></div>
+      <h3 style="color:#22c55e">Top Positive Loadings</h3>
+      <div id="words-positive" class="word-list" style="margin-bottom:16px"></div>
+      <h3 style="color:#ef4444">Top Negative Loadings</h3>
+      <div id="words-negative" class="word-list"></div>
+    </div>
+    <div class="card">
+      <h3>Distance Heatmap</h3>
+      <canvas id="heatmap-canvas" width="500" height="500"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB 4: VALIDATION                                            -->
+<!-- ============================================================ -->
+<div id="validation" class="panel">
+  <div class="validation-grid">
+    <div class="card">
+      <h3>Dialectometric Correlations</h3>
+      <div id="val-stats"></div>
+    </div>
+    <div class="card">
+      <h3>Ranking Constraints</h3>
+      <div id="val-constraints" class="constraint-list"></div>
+    </div>
+    <div class="card">
+      <h3>Closest Dialect Pairs</h3>
+      <div id="val-closest"></div>
+    </div>
+    <div class="card">
+      <h3>Most Distant Pairs</h3>
+      <div id="val-farthest"></div>
+    </div>
+    <div class="card full-width">
+      <h3>Full Distance Matrix</h3>
+      <canvas id="val-heatmap" width="700" height="500"></canvas>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// ================================================================
+// Import pretext for canvas text layout
+// ================================================================
+import { prepare, layout, prepareWithSegments, layoutWithLines } from 'https://esm.sh/@chenglou/pretext@0.0.4'
+
+const COLORS = {
+  ES_PEN: '#ef4444', ES_AND: '#f97316', ES_CAN: '#eab308', ES_RIO: '#22c55e',
+  ES_MEX: '#3b82f6', ES_CAR: '#a855f7', ES_CHI: '#ec4899', ES_AND_BO: '#14b8a6',
+}
+const NAMES = {
+  ES_PEN: 'Peninsular', ES_AND: 'Andaluz', ES_CAN: 'Canario', ES_RIO: 'Rioplatense',
+  ES_MEX: 'Mexicano', ES_CAR: 'Caribe\u00f1o', ES_CHI: 'Chileno', ES_AND_BO: 'Andino',
+}
+
+// ================================================================
+// Tab switching
+// ================================================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
+    tab.classList.add('active')
+    document.getElementById(tab.dataset.panel).classList.add('active')
+  })
+})
+
+// ================================================================
+// TEXT ANALYZER
+// ================================================================
+const inputEl = document.getElementById('input-text')
+let debounceTimer = null
+
+inputEl.addEventListener('input', () => {
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => analyzeText(inputEl.value), 300)
+})
+
+async function analyzeText(text) {
+  if (!text.trim()) return
+  try {
+    const res = await fetch(`/api/score?text=${encodeURIComponent(text)}`)
+    const data = await res.json()
+    renderProbBars(data.probabilities)
+    renderAnalyzedText(text, data.word_scores)
+  } catch (e) {
+    console.error('Score error:', e)
+  }
+}
+
+function renderProbBars(probs) {
+  const container = document.getElementById('prob-bars')
+  const sorted = Object.entries(probs).sort((a, b) => b[1] - a[1])
+  container.innerHTML = sorted.map(([v, p]) => `
+    <div class="prob-bar">
+      <span class="prob-label">${v}</span>
+      <div class="prob-track">
+        <div class="prob-fill" style="width:${(p*100).toFixed(1)}%;background:${COLORS[v]}">${(p*100).toFixed(1)}%</div>
+      </div>
+    </div>
+  `).join('')
+}
+
+function renderAnalyzedText(text, wordScores) {
+  const canvas = document.getElementById('analyzed-canvas')
+  const ctx = canvas.getContext('2d')
+  const dpr = window.devicePixelRatio || 1
+  const cssWidth = canvas.clientWidth
+  const font = '16px Inter, system-ui, sans-serif'
+  const lineHeight = 28
+
+  // Use pretext to measure how tall we need
+  const prepared = prepare(text, font)
+  const measured = layout(prepared, cssWidth - 32, lineHeight)
+  const cssHeight = Math.max(100, measured.height + 40)
+
+  canvas.width = cssWidth * dpr
+  canvas.height = cssHeight * dpr
+  canvas.style.height = cssHeight + 'px'
+  ctx.scale(dpr, dpr)
+
+  ctx.fillStyle = '#0a0a0f'
+  ctx.fillRect(0, 0, cssWidth, cssHeight)
+
+  // Render words with dialect coloring
+  const padX = 16, padY = 20
+  let x = padX, y = padY
+  const maxW = cssWidth - padX * 2
+
+  ctx.font = font
+  ctx.textBaseline = 'top'
+
+  for (const ws of wordScores) {
+    const word = ws.word
+    const space = ctx.measureText(' ').width
+    const wordW = ctx.measureText(word).width
+
+    if (x + wordW > padX + maxW && x > padX) {
+      x = padX
+      y += lineHeight
+    }
+
+    if (ws.in_vocab && ws.top_dialect) {
+      ctx.fillStyle = COLORS[ws.top_dialect] || '#888'
+      ctx.globalAlpha = 0.15
+      ctx.fillRect(x - 2, y - 2, wordW + 4, lineHeight - 4)
+      ctx.globalAlpha = 1.0
+      ctx.fillStyle = COLORS[ws.top_dialect] || '#e0e0e8'
+    } else {
+      ctx.fillStyle = '#666'
+    }
+    ctx.fillText(word, x, y + 4)
+    x += wordW + space
+  }
+}
+
+// Initial analysis
+analyzeText(inputEl.value)
+
+// ================================================================
+// EIGENSPACE
+// ================================================================
+let eigenData = null
+async function loadEigenspace() {
+  const res = await fetch('/api/eigenspace')
+  eigenData = (await res.json()).points
+  renderEigenspace()
+}
+
+function renderEigenspace() {
+  if (!eigenData) return
+  const canvas = document.getElementById('eigenspace-canvas')
+  const ctx = canvas.getContext('2d')
+  const dpr = window.devicePixelRatio || 1
+  const w = canvas.clientWidth
+  const h = 600
+  canvas.width = w * dpr
+  canvas.height = h * dpr
+  canvas.style.height = h + 'px'
+  ctx.scale(dpr, dpr)
+
+  ctx.fillStyle = '#0a0a0f'
+  ctx.fillRect(0, 0, w, h)
+
+  // Compute bounds
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  for (const p of eigenData) {
+    if (p.x < minX) minX = p.x
+    if (p.x > maxX) maxX = p.x
+    if (p.y < minY) minY = p.y
+    if (p.y > maxY) maxY = p.y
+  }
+  const pad = 40
+  const sx = (w - pad * 2) / (maxX - minX || 1)
+  const sy = (h - pad * 2) / (maxY - minY || 1)
+  const scale = Math.min(sx, sy)
+
+  const cx = w / 2, cy = h / 2
+  const midX = (minX + maxX) / 2, midY = (minY + maxY) / 2
+
+  // Draw points
+  const varieties = Object.keys(COLORS)
+  // Downsample for performance
+  const step = Math.max(1, Math.floor(eigenData.length / 8000))
+  for (let i = 0; i < eigenData.length; i += step) {
+    const p = eigenData[i]
+    const px = cx + (p.x - midX) * scale
+    const py = cy + (p.y - midY) * scale
+    ctx.fillStyle = COLORS[p.variety] || '#666'
+    ctx.globalAlpha = 0.35
+    ctx.beginPath()
+    ctx.arc(px, py, 2, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.globalAlpha = 1.0
+
+  // Legend
+  let ly = 20
+  ctx.font = '12px Inter, system-ui'
+  for (const v of varieties) {
+    ctx.fillStyle = COLORS[v]
+    ctx.fillRect(w - 140, ly, 10, 10)
+    ctx.fillStyle = '#e0e0e8'
+    ctx.fillText(NAMES[v], w - 124, ly + 9)
+    ly += 18
+  }
+
+  // Tooltip
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect()
+    const mx = e.clientX - rect.left
+    const my = e.clientY - rect.top
+    let closest = null, closestDist = 20
+    for (let i = 0; i < eigenData.length; i += step) {
+      const p = eigenData[i]
+      const px = cx + (p.x - midX) * scale
+      const py = cy + (p.y - midY) * scale
+      const d = Math.hypot(mx - px, my - py)
+      if (d < closestDist) { closestDist = d; closest = p }
+    }
+    const tip = document.getElementById('eigenspace-tooltip')
+    if (closest) {
+      tip.style.display = 'block'
+      tip.style.left = (e.clientX + 12) + 'px'
+      tip.style.top = (e.clientY + 12) + 'px'
+      tip.innerHTML = `<strong style="color:${COLORS[closest.variety]}">${closest.word}</strong><br>${NAMES[closest.variety]}`
+    } else {
+      tip.style.display = 'none'
+    }
+  }
+}
+loadEigenspace()
+
+// ================================================================
+// MODE EXPLORER
+// ================================================================
+const modeSlider = document.getElementById('mode-slider')
+const modeVariety = document.getElementById('mode-variety')
+const modeLabel = document.getElementById('mode-label')
+
+async function loadModeDetail() {
+  const variety = modeVariety.value
+  const mode = modeSlider.value
+  modeLabel.textContent = `Mode ${mode}`
+
+  try {
+    const res = await fetch(`/api/mode/${mode}?variety=${variety}`)
+    const data = await res.json()
+
+    document.getElementById('mode-info').innerHTML =
+      `|lambda| = ${data.magnitude.toFixed(4)}, ` +
+      `lambda = ${data.eigenvalue_real.toFixed(4)} + ${data.eigenvalue_imag.toFixed(4)}i`
+
+    document.getElementById('words-positive').innerHTML =
+      data.top_positive.slice(0, 20).map(w =>
+        `<span class="word-chip positive">${w.word} <small>${w.loading.toFixed(3)}</small></span>`
+      ).join('')
+
+    document.getElementById('words-negative').innerHTML =
+      data.top_negative.slice(0, 20).map(w =>
+        `<span class="word-chip negative">${w.word} <small>${w.loading.toFixed(3)}</small></span>`
+      ).join('')
+  } catch(e) { console.error(e) }
+}
+
+modeSlider.addEventListener('input', loadModeDetail)
+modeVariety.addEventListener('change', loadModeDetail)
+
+// Probing heatmap
+async function renderProbingMatrix() {
+  const res = await fetch('/api/analysis')
+  const data = await res.json()
+  if (!data.probing) return
+
+  const matrix = data.probing.mode_feature_matrix
+  const features = data.probing.feature_names
+  const nModes = Math.min(20, matrix.length)
+  const nFeats = features.length
+
+  const canvas = document.getElementById('probing-canvas')
+  const ctx = canvas.getContext('2d')
+  const dpr = window.devicePixelRatio || 1
+  const cellW = 50, cellH = 28
+  const labelW = 160, topH = 40
+  const w = labelW + nModes * cellW + 20
+  const h = topH + nFeats * cellH + 20
+
+  canvas.width = w * dpr
+  canvas.height = h * dpr
+  canvas.style.width = w + 'px'
+  canvas.style.height = h + 'px'
+  ctx.scale(dpr, dpr)
+
+  ctx.fillStyle = '#0a0a0f'
+  ctx.fillRect(0, 0, w, h)
+
+  // Column headers (modes)
+  ctx.font = '11px SF Mono, monospace'
+  ctx.fillStyle = '#8888a0'
+  ctx.textAlign = 'center'
+  for (let k = 0; k < nModes; k++) {
+    ctx.fillText(`M${k}`, labelW + k * cellW + cellW / 2, topH - 8)
+  }
+
+  // Rows (features)
+  ctx.textAlign = 'right'
+  for (let j = 0; j < nFeats; j++) {
+    const y = topH + j * cellH
+    ctx.fillStyle = '#c0c0d0'
+    ctx.fillText(features[j], labelW - 8, y + cellH / 2 + 4)
+
+    for (let k = 0; k < nModes; k++) {
+      const val = matrix[k][j]
+      const x = labelW + k * cellW
+
+      // Color: blue for positive, red for negative
+      const intensity = Math.min(1, Math.abs(val) * 1.2)
+      if (val > 0) {
+        ctx.fillStyle = `rgba(59, 130, 246, ${intensity})`
+      } else {
+        ctx.fillStyle = `rgba(239, 68, 68, ${intensity})`
+      }
+      ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2)
+
+      // Value text
+      if (Math.abs(val) > 0.3) {
+        ctx.fillStyle = Math.abs(val) > 0.6 ? '#fff' : '#c0c0d0'
+        ctx.textAlign = 'center'
+        ctx.font = '10px SF Mono, monospace'
+        ctx.fillText(val.toFixed(2), x + cellW / 2, y + cellH / 2 + 3)
+        ctx.textAlign = 'right'
+        ctx.font = '11px SF Mono, monospace'
+      }
+    }
+  }
+}
+
+// Distance heatmap
+async function renderHeatmap() {
+  const res = await fetch('/api/distance_matrix')
+  const data = await res.json()
+  const matrix = data.matrix
+  const varieties = data.varieties
+  const n = varieties.length
+
+  const canvas = document.getElementById('heatmap-canvas')
+  const ctx = canvas.getContext('2d')
+  const dpr = window.devicePixelRatio || 1
+  const cellSize = 52, labelW = 80, topH = 60
+  const w = labelW + n * cellSize + 10
+  const h = topH + n * cellSize + 10
+
+  canvas.width = w * dpr
+  canvas.height = h * dpr
+  canvas.style.width = w + 'px'
+  canvas.style.height = h + 'px'
+  ctx.scale(dpr, dpr)
+
+  ctx.fillStyle = '#0a0a0f'
+  ctx.fillRect(0, 0, w, h)
+
+  // Find max for color scale (ignore diagonal)
+  let maxD = 0
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++)
+      if (i !== j && matrix[i][j] > maxD) maxD = matrix[i][j]
+
+  // Labels
+  ctx.font = '11px SF Mono, monospace'
+  for (let i = 0; i < n; i++) {
+    // Row label
+    ctx.fillStyle = COLORS[varieties[i]] || '#888'
+    ctx.textAlign = 'right'
+    ctx.fillText(varieties[i].replace('ES_', ''), labelW - 6, topH + i * cellSize + cellSize / 2 + 4)
+    // Col label
+    ctx.save()
+    ctx.translate(labelW + i * cellSize + cellSize / 2, topH - 6)
+    ctx.rotate(-Math.PI / 4)
+    ctx.textAlign = 'left'
+    ctx.fillStyle = COLORS[varieties[i]] || '#888'
+    ctx.fillText(varieties[i].replace('ES_', ''), 0, 0)
+    ctx.restore()
+  }
+
+  // Cells
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const x = labelW + j * cellSize
+      const y = topH + i * cellSize
+      const d = matrix[i][j]
+
+      if (i === j) {
+        ctx.fillStyle = '#1a1a2e'
+      } else {
+        // Green (close) to red (far)
+        const t = Math.min(1, d / maxD)
+        const r = Math.round(34 + t * 205)
+        const g = Math.round(197 - t * 140)
+        const b = Math.round(94 - t * 60)
+        ctx.fillStyle = `rgb(${r},${g},${b})`
+      }
+      ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2)
+
+      // Value
+      if (i !== j) {
+        ctx.fillStyle = d / maxD > 0.5 ? '#fff' : '#000'
+        ctx.textAlign = 'center'
+        ctx.font = '10px SF Mono, monospace'
+        ctx.fillText(d.toFixed(1), x + cellSize / 2, y + cellSize / 2 + 3)
+        ctx.font = '11px SF Mono, monospace'
+      }
+    }
+  }
+}
+
+// ================================================================
+// VALIDATION TAB
+// ================================================================
+async function renderValidation() {
+  const res = await fetch('/api/analysis')
+  const data = await res.json()
+  if (!data.validation) return
+  const v = data.validation
+
+  // Stats
+  const statsEl = document.getElementById('val-stats')
+  const simGrade = v.similarity_correlation > 0.7 ? 'excellent' : v.similarity_correlation > 0.5 ? 'good' : 'fail'
+  const geoGrade = v.geographic_correlation > 0.7 ? 'excellent' : v.geographic_correlation > 0.5 ? 'good' : 'fail'
+  statsEl.innerHTML = `
+    <div class="stat"><span>Literature correlation (Spearman)</span><span class="stat-value ${simGrade}">${v.similarity_correlation.toFixed(3)}</span></div>
+    <div class="stat"><span>p-value</span><span class="stat-value">${v.similarity_p_value.toFixed(4)}</span></div>
+    <div class="stat"><span>Geographic correlation</span><span class="stat-value ${geoGrade}">${v.geographic_correlation.toFixed(3)}</span></div>
+    <div class="stat"><span>Ranking constraints</span><span class="stat-value ${v.constraints_satisfied >= 5 ? 'pass' : 'fail'}">${v.constraints_satisfied}/${v.constraints_total}</span></div>
+    <div class="stat"><span>Cohesion ratio (between/within)</span><span class="stat-value ${v.cohesion_ratio > 1.5 ? 'pass' : 'fail'}">${v.cohesion_ratio.toFixed(2)}</span></div>
+  `
+
+  // Constraints
+  const conEl = document.getElementById('val-constraints')
+  conEl.innerHTML = v.constraint_details.map(c => `
+    <div class="constraint">
+      <span class="constraint-icon" style="color:${c.satisfied ? '#22c55e' : '#ef4444'}">${c.satisfied ? '\u2713' : '\u2717'}</span>
+      <span>${c.label}</span>
+    </div>
+  `).join('')
+
+  // Closest
+  document.getElementById('val-closest').innerHTML = v.closest_pairs.map(p => `
+    <div class="stat">
+      <span style="color:${COLORS[p.v1]}">${p.v1}</span> \u2014 <span style="color:${COLORS[p.v2]}">${p.v2}</span>
+      <span class="stat-value">${p.distance.toFixed(2)}</span>
+    </div>
+  `).join('')
+
+  // Farthest
+  document.getElementById('val-farthest').innerHTML = v.farthest_pairs.map(p => `
+    <div class="stat">
+      <span style="color:${COLORS[p.v1]}">${p.v1}</span> \u2014 <span style="color:${COLORS[p.v2]}">${p.v2}</span>
+      <span class="stat-value">${p.distance.toFixed(2)}</span>
+    </div>
+  `).join('')
+
+  // Validation heatmap (reuse distance matrix rendering)
+  const dmRes = await fetch('/api/distance_matrix')
+  const dm = await dmRes.json()
+  renderValHeatmap(dm.matrix, dm.varieties)
+}
+
+function renderValHeatmap(matrix, varieties) {
+  const n = varieties.length
+  const canvas = document.getElementById('val-heatmap')
+  const ctx = canvas.getContext('2d')
+  const dpr = window.devicePixelRatio || 1
+  const cellSize = 64, labelW = 90, topH = 70
+  const w = labelW + n * cellSize + 20
+  const h = topH + n * cellSize + 20
+
+  canvas.width = w * dpr
+  canvas.height = h * dpr
+  canvas.style.width = w + 'px'
+  canvas.style.height = h + 'px'
+  ctx.scale(dpr, dpr)
+
+  ctx.fillStyle = '#0a0a0f'
+  ctx.fillRect(0, 0, w, h)
+
+  let maxD = 0
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++)
+      if (i !== j && matrix[i][j] > maxD) maxD = matrix[i][j]
+
+  ctx.font = '12px Inter, system-ui'
+  for (let i = 0; i < n; i++) {
+    ctx.fillStyle = COLORS[varieties[i]] || '#888'
+    ctx.textAlign = 'right'
+    ctx.fillText(varieties[i], labelW - 8, topH + i * cellSize + cellSize / 2 + 4)
+    ctx.save()
+    ctx.translate(labelW + i * cellSize + cellSize / 2, topH - 8)
+    ctx.rotate(-Math.PI / 4)
+    ctx.textAlign = 'left'
+    ctx.fillText(varieties[i], 0, 0)
+    ctx.restore()
+  }
+
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const x = labelW + j * cellSize, y = topH + i * cellSize
+      const d = matrix[i][j]
+      if (i === j) {
+        ctx.fillStyle = '#1a1a2e'
+      } else {
+        const t = Math.min(1, d / maxD)
+        ctx.fillStyle = `hsl(${120 - t * 120}, 70%, ${25 + (1-t) * 30}%)`
+      }
+      ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2)
+      if (i !== j) {
+        ctx.fillStyle = '#e0e0e8'
+        ctx.textAlign = 'center'
+        ctx.font = '10px SF Mono, monospace'
+        ctx.fillText(d.toFixed(1), x + cellSize / 2, y + cellSize / 2 + 3)
+        ctx.font = '12px Inter, system-ui'
+      }
+    }
+  }
+}
+
+// ================================================================
+// Load everything
+// ================================================================
+renderProbingMatrix()
+renderHeatmap()
+renderValidation()
+loadModeDetail()
+</script>
+</body>
+</html>

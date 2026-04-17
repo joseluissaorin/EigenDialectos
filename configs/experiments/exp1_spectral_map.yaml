@@ -1,0 +1,19 @@
+experiment_id: exp1_spectral_map
+name: "Spectral Map of Spanish"
+description: "Compute eigenspectra for all varieties and visualize dialectal distances"
+
+dialects: all
+embedding_model: fasttext
+alignment_method: procrustes
+
+visualization:
+  projection: [tsne, umap]
+  perplexity: 30
+  n_neighbors: 5
+  generate_dendrogram: true
+  generate_heatmap: true
+
+output:
+  figures: true
+  distance_matrix_csv: true
+  interpretation_text: true

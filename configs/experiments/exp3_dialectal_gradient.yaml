@@ -1,0 +1,13 @@
+experiment_id: exp3_dialectal_gradient
+name: "Dialectal Gradient"
+description: "Sweep alpha from 0.0 to 1.5 and measure dialect recognition"
+
+alpha_range: [0.0, 1.5]
+alpha_step: 0.1
+dialects: all
+n_samples_per_alpha: 20
+
+evaluation:
+  classifier_confidence: true
+  feature_activation: true
+  threshold_detection: true

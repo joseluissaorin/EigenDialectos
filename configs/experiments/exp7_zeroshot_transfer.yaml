@@ -1,0 +1,16 @@
+experiment_id: exp7_zeroshot_transfer
+name: "Zero-shot Dialectal Transfer"
+description: "Train on 6 varieties, predict held-out 2"
+
+n_folds: 4  # C(8,2) = 28 but we sample
+holdout_pairs:
+  - [ES_CAN, ES_AND]
+  - [ES_RIO, ES_CHI]
+  - [ES_MEX, ES_CAR]
+  - [ES_AND_BO, ES_PEN]
+
+reconstruction_method: tensor_completion
+evaluation:
+  frobenius_error: true
+  generation_comparison: true
+  n_samples: 30

@@ -1,0 +1,6 @@
+method: procrustes
+reference_dialect: ES_PEN
+anchor_words: 5000
+normalize: true
+max_iterations: 10
+convergence_threshold: 1.0e-6

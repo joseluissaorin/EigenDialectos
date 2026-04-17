@@ -1,0 +1,13 @@
+experiment_id: exp5_dialectal_archaeology
+name: "Dialectal Archaeology"
+description: "Apply inverse transforms to historical texts"
+
+historical_texts:
+  - source: "golden_age"
+    description: "Spanish Golden Age texts (16th-17th century)"
+  - source: "colonial"
+    description: "Colonial era texts (18th-19th century)"
+
+inverse_dialects: all
+comparison_with_philological: true
+n_samples: 20

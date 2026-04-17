@@ -1,0 +1,29 @@
+holdout:
+  test_ratio: 0.2
+  stratify_by: dialect_code
+
+perplexity:
+  model: gpt2  # or per-dialect LM
+  stride: 128
+  max_length: 256
+
+classification:
+  model: logistic_regression  # logistic_regression, svm, transformer
+  features: eigenvalues  # eigenvalues, embeddings, combined
+  cv_folds: 5
+
+survey:
+  format: html
+  samples_per_dialect: 20
+  include_real: true
+  include_generated: true
+  randomize: true
+  likert_scale: 5
+
+turing_test:
+  pairs_per_dialect: 15
+  randomize: true
+
+hyperdia:
+  alpha_values: [1.0, 1.2, 1.5]
+  samples_per_alpha: 10

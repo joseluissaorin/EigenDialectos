@@ -1,0 +1,721 @@
+# ==============================================================================
+# MANIFEST.yaml -- EigenDialectos Master Project Manifest
+# ==============================================================================
+# This file tracks every deliverable across all project phases.
+# Run `python scripts/validate_project.py` to verify status.
+# Statuses: PENDING | IN_PROGRESS | DONE | BLOCKED
+# ==============================================================================
+
+project:
+  name: EigenDialectos
+  version: "0.1.0"
+  description: "Spectral analysis framework for Spanish dialect variation"
+  python_requires: ">=3.10"
+
+# --------------------------------------------------------------------------
+# Dialect Registry -- canonical dialect codes used throughout the project
+# --------------------------------------------------------------------------
+dialects:
+  - code: ES_PEN
+    name: Castellano peninsular estandar
+    region: "Espana (centro-norte)"
+  - code: ES_AND
+    name: Andaluz
+    region: "Espana (Andalucia)"
+  - code: ES_CAN
+    name: Canario
+    region: "Espana (Islas Canarias)"
+  - code: ES_RIO
+    name: Rioplatense
+    region: "Argentina / Uruguay"
+  - code: ES_MEX
+    name: Mexicano
+    region: "Mexico"
+  - code: ES_CAR
+    name: Caribeno
+    region: "Cuba / Puerto Rico / Rep. Dominicana / Venezuela costera"
+  - code: ES_CHI
+    name: Chileno
+    region: "Chile"
+  - code: ES_AND_BO
+    name: Andino
+    region: "Peru / Bolivia / Ecuador (sierra)"
+
+# --------------------------------------------------------------------------
+# Phases
+# --------------------------------------------------------------------------
+phases:
+
+  # ========================================================================
+  # P0 -- FOUNDATION
+  # ========================================================================
+  P0_FOUNDATION:
+    description: "Core types, constants, utilities, and project scaffolding"
+    components:
+
+      - id: p0_types
+        name: "Core type definitions"
+        files:
+          - src/eigendialectos/types.py
+        tests:
+          - tests/test_foundation/test_types.py
+        status: PENDING
+        depends_on: []
+
+      - id: p0_constants
+        name: "Project-wide constants and enums"
+        files:
+          - src/eigendialectos/constants.py
+        tests:
+          - tests/test_foundation/test_constants.py
+        status: PENDING
+        depends_on: []
+
+      - id: p0_utils_io
+        name: "I/O and caching utilities"
+        files:
+          - src/eigendialectos/utils/__init__.py
+          - src/eigendialectos/utils/io.py
+        tests:
+          - tests/test_foundation/test_utils_io.py
+        status: PENDING
+        depends_on: []
+
+      - id: p0_utils_logging
+        name: "Logging and metric helpers"
+        files:
+          - src/eigendialectos/utils/logging.py
+        tests:
+          - tests/test_foundation/test_utils_logging.py
+        status: PENDING
+        depends_on: []
+
+      - id: p0_utils_misc
+        name: "Reproducibility, GPU, and checkpointing utilities"
+        files:
+          - src/eigendialectos/utils/reproducibility.py
+          - src/eigendialectos/utils/gpu.py
+          - src/eigendialectos/utils/checkpointing.py
+        tests:
+          - tests/test_foundation/test_utils_misc.py
+        status: PENDING
+        depends_on: []
+
+  # ========================================================================
+  # P1 -- CORPUS
+  # ========================================================================
+  P1_CORPUS:
+    description: "Corpus acquisition, preprocessing, and synthetic generation"
+    components:
+
+      - id: p1_corpus_init
+        name: "Corpus package init and base classes"
+        files:
+          - src/eigendialectos/corpus/__init__.py
+          - src/eigendialectos/corpus/base.py
+        tests:
+          - tests/test_corpus/test_corpus_base.py
+        status: PENDING
+        depends_on: [p0_types, p0_constants]
+
+      - id: p1_sources_scraper
+        name: "Web scrapers for dialect corpora"
+        files:
+          - src/eigendialectos/corpus/sources/__init__.py
+          - src/eigendialectos/corpus/sources/scraper.py
+        tests:
+          - tests/test_corpus/test_scraper.py
+        status: PENDING
+        depends_on: [p1_corpus_init]
+
+      - id: p1_sources_datasets
+        name: "HuggingFace / external dataset loaders"
+        files:
+          - src/eigendialectos/corpus/sources/hf_loader.py
+          - src/eigendialectos/corpus/sources/opensubtitles.py
+        tests:
+          - tests/test_corpus/test_hf_loader.py
+        status: PENDING
+        depends_on: [p1_corpus_init]
+
+      - id: p1_preprocessing_pipeline
+        name: "Text normalisation and cleaning pipeline"
+        files:
+          - src/eigendialectos/corpus/preprocessing/__init__.py
+          - src/eigendialectos/corpus/preprocessing/normalizer.py
+          - src/eigendialectos/corpus/preprocessing/tokenizer.py
+          - src/eigendialectos/corpus/preprocessing/filters.py
+        tests:
+          - tests/test_corpus/test_normalizer.py
+          - tests/test_corpus/test_tokenizer.py
+          - tests/test_corpus/test_filters.py
+        status: PENDING
+        depends_on: [p1_corpus_init]
+
+      - id: p1_synthetic_generator
+        name: "Synthetic dialect sample generator"
+        files:
+          - src/eigendialectos/corpus/synthetic/__init__.py
+          - src/eigendialectos/corpus/synthetic/generator.py
+          - src/eigendialectos/corpus/synthetic/rules.py
+        tests:
+          - tests/test_corpus/test_synthetic_generator.py
+        status: PENDING
+        depends_on: [p1_corpus_init, p0_constants]
+
+      - id: p1_dialect_classifier
+        name: "Dialect identification / classification"
+        files:
+          - src/eigendialectos/corpus/classifier.py
+        tests:
+          - tests/test_corpus/test_classifier.py
+        status: PENDING
+        depends_on: [p1_preprocessing_pipeline]
+
+      - id: p1_corpus_configs
+        name: "Hydra configuration files for corpus"
+        files:
+          - configs/corpus/defaults.yaml
+          - configs/corpus/sources.yaml
+          - configs/corpus/preprocessing.yaml
+        tests: []
+        status: PENDING
+        depends_on: [p1_corpus_init]
+
+  # ========================================================================
+  # P2 -- EMBEDDINGS
+  # ========================================================================
+  P2_EMBEDDINGS:
+    description: "Multi-level dialect embedding computation"
+    components:
+
+      - id: p2_embeddings_init
+        name: "Embeddings package init and abstract base"
+        files:
+          - src/eigendialectos/embeddings/__init__.py
+          - src/eigendialectos/embeddings/base.py
+        tests:
+          - tests/test_embeddings/test_embedding_base.py
+        status: PENDING
+        depends_on: [p0_types, p1_corpus_init]
+
+      - id: p2_subword
+        name: "Subword embeddings (FastText / BPE)"
+        files:
+          - src/eigendialectos/embeddings/subword/__init__.py
+          - src/eigendialectos/embeddings/subword/fasttext_trainer.py
+          - src/eigendialectos/embeddings/subword/bpe_embedder.py
+        tests:
+          - tests/test_embeddings/test_subword.py
+        status: PENDING
+        depends_on: [p2_embeddings_init]
+
+      - id: p2_word
+        name: "Word-level embeddings (Word2Vec / GloVe)"
+        files:
+          - src/eigendialectos/embeddings/word/__init__.py
+          - src/eigendialectos/embeddings/word/word2vec_trainer.py
+          - src/eigendialectos/embeddings/word/alignment.py
+        tests:
+          - tests/test_embeddings/test_word.py
+        status: PENDING
+        depends_on: [p2_embeddings_init]
+
+      - id: p2_sentence
+        name: "Sentence-level contextual embeddings (BETO / Sentence-BERT)"
+        files:
+          - src/eigendialectos/embeddings/sentence/__init__.py
+          - src/eigendialectos/embeddings/sentence/beto_embedder.py
+          - src/eigendialectos/embeddings/sentence/sbert_embedder.py
+        tests:
+          - tests/test_embeddings/test_sentence.py
+        status: PENDING
+        depends_on: [p2_embeddings_init]
+
+      - id: p2_contrastive
+        name: "Contrastive dialect-aware embeddings"
+        files:
+          - src/eigendialectos/embeddings/contrastive/__init__.py
+          - src/eigendialectos/embeddings/contrastive/triplet_trainer.py
+          - src/eigendialectos/embeddings/contrastive/loss.py
+        tests:
+          - tests/test_embeddings/test_contrastive.py
+        status: PENDING
+        depends_on: [p2_sentence]
+
+      - id: p2_embeddings_configs
+        name: "Hydra configuration files for embeddings"
+        files:
+          - configs/embeddings/defaults.yaml
+          - configs/embeddings/subword.yaml
+          - configs/embeddings/word.yaml
+          - configs/embeddings/sentence.yaml
+          - configs/embeddings/contrastive.yaml
+        tests: []
+        status: PENDING
+        depends_on: [p2_embeddings_init]
+
+  # ========================================================================
+  # P3 -- SPECTRAL ANALYSIS
+  # ========================================================================
+  P3_SPECTRAL:
+    description: "Eigendecomposition of dialect transformation matrices"
+    components:
+
+      - id: p3_spectral_init
+        name: "Spectral package init and base"
+        files:
+          - src/eigendialectos/spectral/__init__.py
+          - src/eigendialectos/spectral/base.py
+        tests:
+          - tests/test_spectral/test_spectral_base.py
+        status: PENDING
+        depends_on: [p0_types, p2_embeddings_init]
+
+      - id: p3_transformation
+        name: "Dialect transformation matrix construction"
+        files:
+          - src/eigendialectos/spectral/transformation.py
+        tests:
+          - tests/test_spectral/test_transformation.py
+        status: PENDING
+        depends_on: [p3_spectral_init]
+
+      - id: p3_eigen
+        name: "Eigendecomposition pipeline"
+        files:
+          - src/eigendialectos/spectral/eigen.py
+        tests:
+          - tests/test_spectral/test_eigen.py
+        status: PENDING
+        depends_on: [p3_spectral_init, p3_transformation]
+
+      - id: p3_spectrum
+        name: "Spectral profile and entropy analysis"
+        files:
+          - src/eigendialectos/spectral/spectrum.py
+        tests:
+          - tests/test_spectral/test_spectrum.py
+        status: PENDING
+        depends_on: [p3_eigen]
+
+      - id: p3_interpolation
+        name: "Dialectal intensity interpolation via eigenvalues"
+        files:
+          - src/eigendialectos/spectral/interpolation.py
+        tests:
+          - tests/test_spectral/test_interpolation.py
+        status: PENDING
+        depends_on: [p3_eigen]
+
+      - id: p3_spectral_configs
+        name: "Hydra configuration files for spectral"
+        files:
+          - configs/spectral/defaults.yaml
+          - configs/spectral/eigen.yaml
+        tests: []
+        status: PENDING
+        depends_on: [p3_spectral_init]
+
+  # ========================================================================
+  # P4 -- GENERATIVE MODEL
+  # ========================================================================
+  P4_GENERATIVE:
+    description: "Dialect-conditioned text generation"
+    components:
+
+      - id: p4_generative_init
+        name: "Generative package init and base"
+        files:
+          - src/eigendialectos/generative/__init__.py
+          - src/eigendialectos/generative/base.py
+        tests:
+          - tests/test_generative/test_generative_base.py
+        status: PENDING
+        depends_on: [p3_spectral_init, p0_types]
+
+      - id: p4_lora_adapter
+        name: "LoRA adapter for dialect fine-tuning"
+        files:
+          - src/eigendialectos/generative/lora_adapter.py
+        tests:
+          - tests/test_generative/test_lora_adapter.py
+        status: PENDING
+        depends_on: [p4_generative_init]
+
+      - id: p4_dial_model
+        name: "DiAL: Dialect-conditioned Autoregressive LM"
+        files:
+          - src/eigendialectos/generative/dial_model.py
+        tests:
+          - tests/test_generative/test_dial_model.py
+        status: PENDING
+        depends_on: [p4_generative_init, p3_interpolation]
+
+      - id: p4_decoder
+        name: "Decoding strategies (beam search, nucleus, etc.)"
+        files:
+          - src/eigendialectos/generative/decoder.py
+        tests:
+          - tests/test_generative/test_decoder.py
+        status: PENDING
+        depends_on: [p4_dial_model]
+
+      - id: p4_sampler
+        name: "Dialectal alpha-controlled text sampler"
+        files:
+          - src/eigendialectos/generative/sampler.py
+        tests:
+          - tests/test_generative/test_sampler.py
+        status: PENDING
+        depends_on: [p4_decoder, p3_interpolation]
+
+      - id: p4_generative_configs
+        name: "Hydra configuration files for generative"
+        files:
+          - configs/generative/defaults.yaml
+          - configs/generative/lora.yaml
+          - configs/generative/decoding.yaml
+        tests: []
+        status: PENDING
+        depends_on: [p4_generative_init]
+
+  # ========================================================================
+  # P5 -- TENSOR DECOMPOSITION
+  # ========================================================================
+  P5_TENSOR:
+    description: "Multi-dialect tensor construction and factorisation"
+    components:
+
+      - id: p5_tensor_init
+        name: "Tensor package init and base"
+        files:
+          - src/eigendialectos/tensor/__init__.py
+          - src/eigendialectos/tensor/base.py
+        tests:
+          - tests/test_tensor/test_tensor_base.py
+        status: PENDING
+        depends_on: [p0_types, p3_spectral_init]
+
+      - id: p5_construction
+        name: "Tensor construction from dialect embedding pairs"
+        files:
+          - src/eigendialectos/tensor/construction.py
+        tests:
+          - tests/test_tensor/test_construction.py
+        status: PENDING
+        depends_on: [p5_tensor_init]
+
+      - id: p5_decomposition
+        name: "CP / Tucker / TT decomposition wrappers"
+        files:
+          - src/eigendialectos/tensor/decomposition.py
+        tests:
+          - tests/test_tensor/test_decomposition.py
+        status: PENDING
+        depends_on: [p5_tensor_init]
+
+      - id: p5_analysis
+        name: "Factor analysis and dialect clustering from tensor"
+        files:
+          - src/eigendialectos/tensor/analysis.py
+        tests:
+          - tests/test_tensor/test_tensor_analysis.py
+        status: PENDING
+        depends_on: [p5_decomposition]
+
+      - id: p5_tensor_configs
+        name: "Hydra configuration files for tensor"
+        files:
+          - configs/tensor/defaults.yaml
+          - configs/tensor/decomposition.yaml
+        tests: []
+        status: PENDING
+        depends_on: [p5_tensor_init]
+
+  # ========================================================================
+  # P6 -- ALGEBRA (Unified Operator Algebra)
+  # ========================================================================
+  P6_ALGEBRA:
+    description: "Unified algebraic framework over dialect transformations"
+    components:
+
+      - id: p6_operators
+        name: "Dialect operator algebra (composition, inversion, interpolation)"
+        files:
+          - src/eigendialectos/algebra/__init__.py
+          - src/eigendialectos/algebra/operators.py
+          - src/eigendialectos/algebra/group.py
+        tests:
+          - tests/test_algebra/test_operators.py
+          - tests/test_algebra/test_group.py
+        status: PENDING
+        depends_on: [p3_eigen, p5_decomposition]
+
+      - id: p6_distance
+        name: "Spectral distance metrics between dialects"
+        files:
+          - src/eigendialectos/algebra/distance.py
+        tests:
+          - tests/test_algebra/test_distance.py
+        status: PENDING
+        depends_on: [p6_operators]
+
+  # ========================================================================
+  # P7 -- VISUALIZATION
+  # ========================================================================
+  P7_VISUALIZATION:
+    description: "Interactive and static visualisation of dialect spaces"
+    components:
+
+      - id: p7_static
+        name: "Static matplotlib/seaborn plots"
+        files:
+          - src/eigendialectos/visualization/__init__.py
+          - src/eigendialectos/visualization/static.py
+          - src/eigendialectos/visualization/spectrum_plot.py
+        tests:
+          - tests/test_visualization/test_static.py
+        status: PENDING
+        depends_on: [p3_spectrum, p6_distance]
+
+      - id: p7_interactive
+        name: "Interactive Plotly / UMAP dashboards"
+        files:
+          - src/eigendialectos/visualization/interactive.py
+          - src/eigendialectos/visualization/umap_plot.py
+        tests:
+          - tests/test_visualization/test_interactive.py
+        status: PENDING
+        depends_on: [p7_static]
+
+  # ========================================================================
+  # P8 -- EXPERIMENTS
+  # ========================================================================
+  P8_EXPERIMENTS:
+    description: "Reproducible experiment pipeline and individual experiments"
+    components:
+
+      - id: p8_runner
+        name: "Experiment runner framework"
+        files:
+          - src/eigendialectos/experiments/__init__.py
+          - src/eigendialectos/experiments/runner.py
+          - src/eigendialectos/experiments/base_experiment.py
+        tests:
+          - tests/test_experiments/test_runner.py
+        status: PENDING
+        depends_on: [p0_utils_io, p0_utils_logging]
+
+      - id: p8_exp01_embedding_quality
+        name: "Exp01: Embedding quality evaluation"
+        files:
+          - src/eigendialectos/experiments/exp01_embedding_quality.py
+          - configs/experiments/exp01.yaml
+        tests:
+          - tests/test_experiments/test_exp01.py
+        status: PENDING
+        depends_on: [p8_runner, p2_subword, p2_word, p2_sentence]
+
+      - id: p8_exp02_spectral_analysis
+        name: "Exp02: Spectral analysis of dialect pairs"
+        files:
+          - src/eigendialectos/experiments/exp02_spectral_analysis.py
+          - configs/experiments/exp02.yaml
+        tests:
+          - tests/test_experiments/test_exp02.py
+        status: PENDING
+        depends_on: [p8_runner, p3_spectrum]
+
+      - id: p8_exp03_interpolation
+        name: "Exp03: Dialectal interpolation experiments"
+        files:
+          - src/eigendialectos/experiments/exp03_interpolation.py
+          - configs/experiments/exp03.yaml
+        tests:
+          - tests/test_experiments/test_exp03.py
+        status: PENDING
+        depends_on: [p8_runner, p3_interpolation]
+
+      - id: p8_exp04_generation
+        name: "Exp04: Dialect-conditioned generation"
+        files:
+          - src/eigendialectos/experiments/exp04_generation.py
+          - configs/experiments/exp04.yaml
+        tests:
+          - tests/test_experiments/test_exp04.py
+        status: PENDING
+        depends_on: [p8_runner, p4_sampler]
+
+      - id: p8_exp05_tensor
+        name: "Exp05: Tensor decomposition analysis"
+        files:
+          - src/eigendialectos/experiments/exp05_tensor.py
+          - configs/experiments/exp05.yaml
+        tests:
+          - tests/test_experiments/test_exp05.py
+        status: PENDING
+        depends_on: [p8_runner, p5_analysis]
+
+      - id: p8_exp06_contrastive
+        name: "Exp06: Contrastive embedding evaluation"
+        files:
+          - src/eigendialectos/experiments/exp06_contrastive.py
+          - configs/experiments/exp06.yaml
+        tests:
+          - tests/test_experiments/test_exp06.py
+        status: PENDING
+        depends_on: [p8_runner, p2_contrastive]
+
+      - id: p8_exp07_full_pipeline
+        name: "Exp07: End-to-end pipeline benchmark"
+        files:
+          - src/eigendialectos/experiments/exp07_full_pipeline.py
+          - configs/experiments/exp07.yaml
+        tests:
+          - tests/test_experiments/test_exp07.py
+        status: PENDING
+        depends_on:
+          - p8_runner
+          - p6_operators
+          - p7_static
+
+  # ========================================================================
+  # P9 -- VALIDATION
+  # ========================================================================
+  P9_VALIDATION:
+    description: "Quantitative and qualitative validation of results"
+    components:
+
+      - id: p9_quantitative
+        name: "Quantitative metrics (cosine, BLEU, perplexity, etc.)"
+        files:
+          - src/eigendialectos/validation/__init__.py
+          - src/eigendialectos/validation/quantitative/__init__.py
+          - src/eigendialectos/validation/quantitative/metrics.py
+          - src/eigendialectos/validation/quantitative/benchmarks.py
+        tests:
+          - tests/test_validation/test_metrics.py
+          - tests/test_validation/test_benchmarks.py
+        status: PENDING
+        depends_on: [p3_spectrum, p4_sampler]
+
+      - id: p9_qualitative
+        name: "Qualitative evaluation (human judgement framework)"
+        files:
+          - src/eigendialectos/validation/qualitative/__init__.py
+          - src/eigendialectos/validation/qualitative/survey.py
+          - src/eigendialectos/validation/qualitative/annotator.py
+        tests:
+          - tests/test_validation/test_survey.py
+        status: PENDING
+        depends_on: [p9_quantitative]
+
+      - id: p9_validation_configs
+        name: "Hydra configuration files for validation"
+        files:
+          - configs/validation/defaults.yaml
+          - configs/validation/metrics.yaml
+        tests: []
+        status: PENDING
+        depends_on: [p9_quantitative]
+
+  # ========================================================================
+  # P10 -- CLI
+  # ========================================================================
+  P10_CLI:
+    description: "Command-line interface for the full pipeline"
+    components:
+
+      - id: p10_cli_main
+        name: "Main CLI entry point (click)"
+        files:
+          - src/eigendialectos/cli/__init__.py
+          - src/eigendialectos/cli/main.py
+        tests:
+          - tests/test_cli/test_main.py
+        status: PENDING
+        depends_on: [p8_runner]
+
+      - id: p10_cli_commands
+        name: "CLI sub-commands (train, eval, generate, visualize)"
+        files:
+          - src/eigendialectos/cli/commands.py
+        tests:
+          - tests/test_cli/test_commands.py
+        status: PENDING
+        depends_on: [p10_cli_main]
+
+      - id: p10_cli_config
+        name: "CLI Hydra config integration"
+        files:
+          - configs/cli/defaults.yaml
+        tests: []
+        status: PENDING
+        depends_on: [p10_cli_main]
+
+  # ========================================================================
+  # P11 -- DOCUMENTATION
+  # ========================================================================
+  P11_DOCS:
+    description: "Project documentation, paper drafts, and notebooks"
+    components:
+
+      - id: p11_api_docs
+        name: "API documentation and usage guide"
+        files:
+          - docs/api/index.md
+          - docs/api/types.md
+          - docs/api/corpus.md
+          - docs/api/embeddings.md
+          - docs/api/spectral.md
+          - docs/api/generative.md
+          - docs/api/tensor.md
+          - docs/api/algebra.md
+          - docs/api/visualization.md
+        tests: []
+        status: PENDING
+        depends_on: []
+
+      - id: p11_paper
+        name: "Research paper LaTeX sources"
+        files:
+          - paper/main.tex
+          - paper/references.bib
+        tests: []
+        status: PENDING
+        depends_on: []
+
+# --------------------------------------------------------------------------
+# Validation Rules
+# --------------------------------------------------------------------------
+validation_rules:
+
+  file_existence:
+    description: "Every file listed in a DONE component must exist on disk"
+    severity: ERROR
+
+  import_check:
+    description: "Every .py file must be importable without runtime errors"
+    severity: ERROR
+
+  test_pass:
+    description: "Every test file listed must pass when run via pytest"
+    severity: WARNING
+
+  dependency_ordering:
+    description: "A component cannot be DONE if any of its depends_on are not DONE"
+    severity: ERROR
+
+  min_test_coverage:
+    description: "Each DONE component with tests should have >= 80% line coverage"
+    target: 80
+    severity: WARNING
+
+  no_orphan_files:
+    description: "Every .py file under src/ should appear in at least one component"
+    severity: WARNING
+
+  config_consistency:
+    description: "Config YAML files referenced must parse without errors"
+    severity: WARNING

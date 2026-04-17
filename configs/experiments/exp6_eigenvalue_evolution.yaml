@@ -1,0 +1,9 @@
+experiment_id: exp6_eigenvalue_evolution
+name: "Eigenvalues as Evolution Proxy"
+description: "Compare eigenvector structure across varieties for phylogenetic analysis"
+
+comparison_method: cosine_similarity
+clustering: hierarchical
+n_top_eigenvectors: 20
+generate_phylogenetic_tree: true
+historical_correlation: true

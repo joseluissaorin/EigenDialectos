@@ -1,0 +1,16 @@
+tucker:
+  rank: [10, 10, 4]
+  init: svd
+  n_iter_max: 100
+  tolerance: 1.0e-6
+
+cp:
+  rank: 10
+  init: random
+  n_iter_max: 100
+  tolerance: 1.0e-6
+  n_restarts: 5
+
+analysis:
+  explained_variance_threshold: 0.90
+  n_top_factors: 5

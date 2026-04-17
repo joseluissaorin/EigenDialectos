@@ -1,0 +1,25 @@
+transformation:
+  method: lstsq
+  regularization: 0.01
+  regularization_type: ridge
+
+eigendecomposition:
+  method: both  # eigen, svd, or both
+  n_components: null  # null = all
+  handle_complex: magnitude
+
+eigenspectrum:
+  energy_threshold: 0.95
+  min_eigenvalue: 1.0e-8
+
+entropy:
+  epsilon: 1.0e-10
+  base: natural  # natural, log2, log10
+
+distance:
+  methods:
+    - frobenius
+    - spectral
+    - subspace
+    - entropy
+  subspace_k: 10

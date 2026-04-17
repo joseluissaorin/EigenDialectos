@@ -1,0 +1,8 @@
+model: word2vec
+dim: 300
+window: 5
+min_count: 5
+epochs: 15
+sg: 1
+neg: 10
+per_variety: true

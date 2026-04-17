@@ -1,0 +1,30 @@
+alpha:
+  default: 1.0
+  range: [0.0, 1.5]
+  step: 0.1
+
+mixing:
+  method: linear  # linear, log_euclidean
+  normalize_weights: true
+
+constraints:
+  max_condition_number: 1000.0
+  max_eigenvalue_magnitude: 100.0
+  min_eigenvalue_magnitude: 0.001
+  check_convex_hull: false
+
+lora:
+  base_model: "meta-llama/Llama-2-7b-chat-hf"
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: ["q_proj", "v_proj"]
+  epochs: 3
+  batch_size: 8
+  learning_rate: 2.0e-4
+
+generation:
+  method: algebraic  # algebraic, lora, hybrid
+  temperature: 0.7
+  top_p: 0.9
+  max_length: 256

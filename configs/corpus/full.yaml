@@ -1,0 +1,23 @@
+mode: full
+samples_per_dialect: 50000
+sources:
+  - synthetic
+  - wikipedia
+  - opensubtitles
+  - twitter
+  - podcasts
+  - corpes_xxi
+  - corpus_del_espanol
+seed: 42
+preprocessing:
+  normalize_unicode: true
+  remove_urls: true
+  remove_mentions: true
+  min_length: 10
+  max_length: 1000
+  deduplicate: true
+  quality_filter: true
+  language_confidence: 0.8
+segmentation:
+  method: sentence
+  max_segment_length: 512

@@ -1,0 +1,9 @@
+model: beto
+pretrained: "dccuchile/bert-base-spanish-wwm-cased"
+max_length: 128
+batch_size: 32
+learning_rate: 2.0e-5
+epochs: 3
+warmup_steps: 100
+pooling: mean
+per_variety: true

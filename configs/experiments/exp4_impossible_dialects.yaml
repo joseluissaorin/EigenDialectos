@@ -1,0 +1,21 @@
+experiment_id: exp4_impossible_dialects
+name: "Impossible Dialects"
+description: "Combine mutually exclusive dialectal features"
+
+feature_conflicts:
+  - [voseo, vosotros]
+  - [seseo, ceceo]
+  - [aspiration, full_pronunciation]
+
+mixing_pairs:
+  - dialects: [ES_RIO, ES_PEN]
+    weights: [0.5, 0.5]
+  - dialects: [ES_AND, ES_AND_BO]
+    weights: [0.5, 0.5]
+  - dialects: [ES_CAR, ES_CHI]
+    weights: [0.5, 0.5]
+
+n_samples: 30
+evaluation:
+  coherence_check: true
+  native_speaker_eval: true

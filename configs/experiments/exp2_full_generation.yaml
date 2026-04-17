@@ -1,0 +1,14 @@
+experiment_id: exp2_full_generation
+name: "100% Generation"
+description: "Generate full dialect versions of neutral text"
+
+source_dialect: ES_PEN
+target_dialects: all
+alpha: 1.0
+n_samples: 50
+generation_method: algebraic
+
+evaluation:
+  automatic_metrics: [bleu, chrf, bertscore]
+  dialectal_perplexity: true
+  generate_survey: true

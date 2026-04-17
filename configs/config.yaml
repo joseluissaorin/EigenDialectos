@@ -1,0 +1,30 @@
+defaults:
+  - corpus: demo
+  - embeddings: fasttext
+  - spectral: default
+  - generative: dial
+  - tensor: default
+  - validation: default
+
+seed: 42
+device: auto
+output_dir: ${hydra:runtime.cwd}/outputs/${now:%Y-%m-%d_%H-%M-%S}
+data_dir: ${hydra:runtime.cwd}/data
+model_dir: ${hydra:runtime.cwd}/models
+log_level: INFO
+
+project:
+  name: EigenDialectos
+  version: 0.1.0
+  description: "Spectral Decomposition of Spanish Dialect Varieties in Embedding Spaces"
+
+dialects:
+  reference: ES_PEN
+  targets:
+    - ES_AND
+    - ES_CAN
+    - ES_RIO
+    - ES_MEX
+    - ES_CAR
+    - ES_CHI
+    - ES_AND_BO

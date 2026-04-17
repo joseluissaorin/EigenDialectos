@@ -1,0 +1,10 @@
+model: fasttext
+dim: 300
+window: 5
+min_count: 5
+epochs: 10
+sg: 1
+neg: 10
+min_n: 3
+max_n: 6
+per_variety: true

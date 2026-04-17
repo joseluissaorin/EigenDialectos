@@ -1,0 +1,15 @@
+mode: synthetic
+samples_per_dialect: 200
+sources:
+  - synthetic
+seed: 42
+preprocessing:
+  normalize_unicode: true
+  remove_urls: true
+  remove_mentions: true
+  min_length: 10
+  max_length: 500
+  deduplicate: true
+segmentation:
+  method: sentence
+  max_segment_length: 128
